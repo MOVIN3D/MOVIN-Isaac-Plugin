@@ -1,6 +1,7 @@
 # MOVIN Isaac Plugin
 
-Receives real-time mocap data from **MOVIN Studio** and drives a humanoid skeleton or MOVINMan character in **Isaac Lab**, with optional high-fidelity surface mesh overlay via Linear Blend Skinning.
+MOVIN motion capture integration for **Isaac Lab** (NVIDIA Isaac Sim).
+Receives real-time mocap data from **MOVIN Studio** and drives a humanoid skeleton or MOVINMan character in **Isaac Lab**.
 
 ## Setup
 
@@ -23,11 +24,11 @@ MOVIN-Isaac-Plugin/
   movin_sdk_python/              # git submodule (MOVIN-SDK-Python)
   examples/
     mocap_to_isaaclab.py         # MOVIN -> Isaac Lab visualization
-    Locomotion.bvh               # Sample BVH for testing
   data/
     movinman_skeleton.xml        # MOVINMan MJCF skeleton (51 bones)
     movinman_mesh.npz            # Pre-extracted mesh for LBS overlay
     MOVINMan_dump.xml            # MOVINMan FBX dump
+    Locomotion.bvh               # Sample BVH for testing
 ```
 
 ## Live Mocap from MOVIN Studio
@@ -85,15 +86,15 @@ Play back offline BVH motion capture files:
 ```bash
 # Skeleton only
 python examples/mocap_to_isaaclab.py --mode bvh \
-    --bvh_file examples/Locomotion.bvh
+    --bvh_file data/Locomotion.bvh
 
 # Skeleton + mesh overlay
 python examples/mocap_to_isaaclab.py --mode bvh \
-    --bvh_file examples/Locomotion.bvh --view_mode mesh_skeleton
+    --bvh_file data/Locomotion.bvh --view_mode mesh_skeleton
 
 # Mesh only (no skeleton)
 python examples/mocap_to_isaaclab.py --mode bvh \
-    --bvh_file examples/Locomotion.bvh --view_mode mesh
+    --bvh_file data/Locomotion.bvh --view_mode mesh
 ```
 
 ## Options
