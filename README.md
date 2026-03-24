@@ -116,7 +116,7 @@ python examples/mocap_to_isaaclab.py --mode bvh \
 
 # Replay with robot
 python examples/mocap_to_isaaclab.py --mode replay \
-    --recording data/recordings/session.pkl --robot unitree_g1
+    --recording data/recordings/movin_session.pkl --robot unitree_g1
 
 # Robot + mesh overlay
 python examples/mocap_to_isaaclab.py --mode live --port 11235 \
