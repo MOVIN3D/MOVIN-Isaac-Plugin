@@ -1,7 +1,7 @@
 # MOVIN Isaac Plugin
 
 MOVIN motion capture integration for **Isaac Lab** (NVIDIA Isaac Sim).
-Receives real-time mocap data from **MOVIN Studio** and drives a humanoid skeleton or MOVINMan character in **Isaac Lab**.
+Receives real-time mocap data from **MOVIN Studio** and drives a humanoid skeleton or MOVINMan character in **Isaac Lab**, with optional robot retargeting to drive a Unitree G1 alongside the human character.
 
 ## Setup
 
@@ -97,6 +97,43 @@ python examples/mocap_to_isaaclab.py --mode bvh \
     --bvh_file data/Locomotion.bvh --view_mode mesh
 ```
 
+## Robot Retargeting
+
+Add `--robot` to any mode to retarget MOVIN mocap data to a Unitree G1 robot in real time.
+
+```bash
+# Live mocap: MOVIN character + robot side by side
+python examples/mocap_to_isaaclab.py --mode live --port 11235 \
+    --robot unitree_g1 --robot_view side_by_side
+
+# Robot only (no MOVIN character)
+python examples/mocap_to_isaaclab.py --mode live --port 11235 \
+    --robot unitree_g1 --robot_view robot_only
+
+# BVH playback with robot
+python examples/mocap_to_isaaclab.py --mode bvh \
+    --bvh_file data/Locomotion.bvh --robot unitree_g1
+
+# Replay with robot
+python examples/mocap_to_isaaclab.py --mode replay \
+    --recording data/recordings/session.pkl --robot unitree_g1
+
+# Robot + mesh overlay
+python examples/mocap_to_isaaclab.py --mode live --port 11235 \
+    --robot unitree_g1 --view_mode mesh_skeleton
+
+# Debug mode (print IK error)
+python examples/mocap_to_isaaclab.py --mode live --port 11235 \
+    --robot unitree_g1 --debug
+```
+
+### Supported Robots
+
+| Robot | Description | DoFs |
+|-------|-------------|------|
+| `unitree_g1` | Unitree G1 (standard) | 29 |
+| `unitree_g1_with_hands` | Unitree G1 with hands | 43 |
+
 ## Options
 
 | Option | Values | Description |
@@ -109,6 +146,10 @@ python examples/mocap_to_isaaclab.py --mode bvh \
 | `--forward_mode` | `coord_equivalent`, `isaac_world` | Facing direction (`isaac_world` = +90 deg yaw for Isaac +X) |
 | `--record` | `<path>` | Record live session to `.pkl` file |
 | `--recording` | `<path>` | Replay from recorded `.pkl` file |
+| `--robot` | `unitree_g1`, `unitree_g1_with_hands` | Enable robot retargeting |
+| `--human_height` | float (default: 1.75) | Human height for retargeting scaling |
+| `--robot_view` | `side_by_side`, `robot_only`, `overlay` | Robot display mode |
+| `--robot_offset` | float (default: 2.0) | X offset for side-by-side view |
 | `--mesh_npz` | `<path>` | Path to `movinman_mesh.npz` (auto-detected if not set) |
 | `--headless` | | No GUI window |
 | `--debug` | | Print FPS and debug info |

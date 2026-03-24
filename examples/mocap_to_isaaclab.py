@@ -62,6 +62,16 @@ parser.add_argument("--view_mode", type=str, default="skeleton",
                     help="Visualization mode: skeleton only, mesh only, or both")
 parser.add_argument("--mesh_npz", type=str, default=None,
                     help="Path to movinman_mesh.npz (auto-detected if not set)")
+parser.add_argument("--robot", type=str, default=None,
+                    choices=["unitree_g1", "unitree_g1_with_hands"],
+                    help="Enable robot retargeting with the specified robot type")
+parser.add_argument("--human_height", type=float, default=1.75,
+                    help="Human height in meters for robot retargeting scaling (default: 1.75)")
+parser.add_argument("--robot_view", type=str, default="side_by_side",
+                    choices=["side_by_side", "robot_only", "overlay"],
+                    help="Robot display mode: side_by_side, robot_only, or overlay")
+parser.add_argument("--robot_offset", type=float, default=2.0,
+                    help="X offset for side_by_side robot view (default: 2.0 m)")
 parser.add_argument("--debug", action="store_true",
                     help="Print FPS and debug info")
 parser.add_argument("--print_joints", action="store_true",
@@ -132,6 +142,7 @@ from movin_sdk_python.utils.movinman_mesh_utils import (
 )
 
 CHARACTER_ROOT_PATH = "/World/envs/env_0/character"
+ROBOT_ROOT_PATH = "/World/envs/env_0/robot"
 MESH_PRIM_PATH = "/World/MOVINManMesh"
 
 
@@ -387,6 +398,49 @@ def create_articulation(usd_path, start_pos=(0.0, 0.0, DEFAULT_HIPS_HEIGHT)):
     return articulation
 
 
+def create_robot_articulation(usd_path, robot_root_name="pelvis", start_pos=(2.0, 0.0, 0.8)):
+    """Create an Isaac Lab articulation for the retarget robot."""
+    articulation_props = sim_utils.ArticulationRootPropertiesCfg(
+        enabled_self_collisions=False,
+        fix_root_link=False,
+    )
+    rigid_props = sim_utils.RigidBodyPropertiesCfg(
+        max_depenetration_velocity=10.0,
+        angular_damping=0.0,
+        max_linear_velocity=1000.0,
+        max_angular_velocity=1000.0,
+        disable_gravity=True,
+    )
+
+    usd_cfg = sim_utils.UsdFileCfg(
+        usd_path=usd_path,
+        articulation_props=articulation_props,
+        rigid_props=rigid_props,
+    )
+    usd_cfg.func(ROBOT_ROOT_PATH, usd_cfg)
+
+    actuator_cfg = IdealPDActuatorCfg(
+        joint_names_expr=[".*"],
+        stiffness=0,
+        damping=0,
+        effort_limit=0,
+    )
+
+    init_state = ArticulationCfg.InitialStateCfg(
+        pos=start_pos,
+        rot=(1.0, 0.0, 0.0, 0.0),
+    )
+
+    art_cfg = ArticulationCfg(
+        prim_path=f"{ROBOT_ROOT_PATH}/{robot_root_name}",
+        spawn=None,
+        init_state=init_state,
+        actuators={"actuators": actuator_cfg},
+    )
+
+    return Articulation(art_cfg)
+
+
 def detect_bvh_scale(bvh_data):
     """Auto-detect whether BVH positions are in centimeters or meters."""
     root_y_values = bvh_data.pos[:, 0, 1]  # root Y position (height in Y-up)
@@ -420,10 +474,14 @@ def main():
         print("ERROR: --bvh_file is required in bvh mode")
         sys.exit(1)
 
+    # ---- Robot retarget flag ----
+    robot_enabled = args.robot is not None
+    skip_movin_character = robot_enabled and args.robot_view == "robot_only"
+
     # ---- View mode flags ----
-    mesh_enabled = args.view_mode in ("mesh", "mesh_skeleton")
-    skeleton_visible = args.view_mode in ("skeleton", "mesh_skeleton")
-    mesh_only = args.view_mode == "mesh"
+    mesh_enabled = args.view_mode in ("mesh", "mesh_skeleton") and not skip_movin_character
+    skeleton_visible = args.view_mode in ("skeleton", "mesh_skeleton") and not skip_movin_character
+    mesh_only = args.view_mode == "mesh" and not skip_movin_character
 
     # ---- Determine control FPS ----
     if args.mode == "bvh":
@@ -447,12 +505,52 @@ def main():
 
     # ---- Character (skeleton articulation) ----
     articulation = None
-    if not mesh_only:
+    if not mesh_only and not skip_movin_character:
         mjcf_path = os.path.join(PROJECT_ROOT, "data", "movinman_skeleton.xml")
         print(f"[INFO] Converting MJCF: {mjcf_path}")
         usd_path = convert_mjcf_to_usd(mjcf_path)
         print(f"[INFO] USD path: {usd_path}")
         articulation = create_articulation(usd_path)
+
+    # ---- Robot retargeting setup ----
+    robot_articulation = None
+    retargeter = None
+
+    if robot_enabled:
+        from movin_sdk_python.retargeter.retargeter import Retargeter, ROBOT_XML_DICT
+
+        print(f"[INFO] Initializing robot retargeter: {args.robot}")
+        retargeter = Retargeter(
+            robot_type=args.robot,
+            human_height=args.human_height,
+            verbose=args.debug,
+        )
+
+        import mujoco as _mj
+        _seed_q = retargeter.configuration.data.qpos.copy()
+        _mj_model = retargeter.configuration.model
+        for _jname, _angle in [
+            ("left_shoulder_roll_joint", 1.5708),
+            ("right_shoulder_roll_joint", -1.5708),
+        ]:
+            _jid = _mj.mj_name2id(_mj_model, _mj.mjtObj.mjOBJ_JOINT, _jname)
+            if _jid >= 0:
+                _seed_q[_mj_model.jnt_qposadr[_jid]] = _angle
+        retargeter.configuration.update(_seed_q)
+
+        from movin_sdk_python.utils.usd_utils import fix_mjcf_usd_materials
+        robot_mjcf_path = str(ROBOT_XML_DICT[args.robot])
+        print(f"[INFO] Converting robot MJCF: {robot_mjcf_path}")
+        robot_usd_path = convert_mjcf_to_usd(robot_mjcf_path)
+        fix_mjcf_usd_materials(robot_mjcf_path, robot_usd_path)
+        print(f"[INFO] Robot USD path: {robot_usd_path}")
+
+        robot_start_x = args.robot_offset if args.robot_view == "side_by_side" else 0.0
+        robot_articulation = create_robot_articulation(
+            robot_usd_path,
+            robot_root_name="pelvis",
+            start_pos=(robot_start_x, 0.0, 0.8),
+        )
 
     # ---- Initialize simulation ----
     sim.reset()
@@ -501,8 +599,60 @@ def main():
         else:
             print(f"[INFO] Joint ordering matches skeleton (no reorder needed)")
 
+    # ---- Robot articulation DOF reorder map ----
+    robot_env_ids = None
+    robot_root_vel = None
+    robot_root_pose_t = None
+    robot_dof_pos_t = None
+    robot_dof_vel_t = None
+    robot_num_dofs = 0
+    robot_reorder_map = None
+    robot_dof_reordered = None
+
+    if robot_articulation is not None:
+        robot_joint_names = list(robot_articulation.data.joint_names)
+        robot_num_dofs = len(robot_joint_names)
+        robot_env_ids = torch.tensor([0], dtype=torch.long, device=sim.device)
+        robot_root_vel = torch.zeros(1, 6, dtype=torch.float32, device=sim.device)
+        robot_root_pose_t = torch.zeros(1, 7, dtype=torch.float32, device=sim.device)
+        robot_dof_pos_t = torch.zeros(1, robot_num_dofs, dtype=torch.float32, device=sim.device)
+        robot_dof_vel_t = torch.zeros(1, robot_num_dofs, dtype=torch.float32, device=sim.device)
+
+        import mujoco
+        if retargeter is not None:
+            mj_model = retargeter.configuration.model
+            mj_joint_names = []
+            for i in range(mj_model.njnt):
+                jname = mujoco.mj_id2name(mj_model, mujoco.mjtObj.mjOBJ_JOINT, i)
+                jtype = mj_model.jnt_type[i]
+                if jtype != 0:
+                    mj_joint_names.append(jname)
+
+            isaac_name_to_idx = {name: i for i, name in enumerate(robot_joint_names)}
+
+            robot_reorder_map = np.zeros(len(mj_joint_names), dtype=np.int64)
+            mismatch = False
+            for mj_idx, mj_name in enumerate(mj_joint_names):
+                if mj_name in isaac_name_to_idx:
+                    isaac_idx = isaac_name_to_idx[mj_name]
+                    robot_reorder_map[mj_idx] = isaac_idx
+                    if mj_idx != isaac_idx:
+                        mismatch = True
+                else:
+                    print(f"[WARN] MuJoCo joint '{mj_name}' not found in Isaac Lab!")
+                    robot_reorder_map[mj_idx] = mj_idx
+
+            if mismatch:
+                robot_dof_reordered = np.zeros(robot_num_dofs, dtype=np.float32)
+                print(f"[INFO] Robot DOF reorder map built (MuJoCo→Isaac Lab ordering differs)")
+            else:
+                robot_reorder_map = None
+                print(f"[INFO] Robot joint ordering matches MuJoCo (no reorder needed)")
+
     print(f"[INFO] Forward mode: {args.forward_mode} (choices: {', '.join(FORWARD_MODE_CHOICES)})")
     print(f"[INFO] View mode: {args.view_mode}")
+    if robot_enabled:
+        print(f"[INFO] Robot: {args.robot}, view: {args.robot_view}")
 
     # ---- Keyboard UI (MimicKit sim_env.py pattern) ----
     play_mode = PlayMode.PLAY
@@ -551,6 +701,7 @@ def main():
     bvh_data = None
     bvh_frame_idx = 0
     bvh_scale = 1.0
+    bvh_retarget_frames = None
 
     if args.mode == "live":
         from movin_sdk_python.mocap_receiver.mocap_receiver import MocapReceiver
@@ -591,12 +742,18 @@ def main():
         print(f"[INFO]   Bones: {len(bvh_data.bones)}, Frames: {num_frames}, FPS: {control_fps:.1f}")
         print(f"[INFO]   Position scale: {bvh_scale} ({'cm->m' if bvh_scale < 1.0 else 'already meters'})")
 
+        if robot_enabled and retargeter is not None:
+            bvh_retarget_frames, _, _, _ = retargeter.load_bvh(bvh_file)
+            print(f"[INFO] Precomputed {len(bvh_retarget_frames)} BVH retarget frames")
+
     # ---- Persistent state for kinematic driving ----
     last_root_pos = np.array([0.0, 0.0, DEFAULT_HIPS_HEIGHT])
     last_root_quat = np.array([1.0, 0.0, 0.0, 0.0])
     last_dof_values = np.zeros(num_dofs)
     last_mesh_local_quats_yup = None
     last_mesh_root_pos_yup = None
+    last_robot_root_pos = np.array([0.0, 0.0, 0.8])
+    last_frame_bones = None
     has_first_frame = False
 
     # Pre-allocate tensors (reuse each frame to avoid CPU->GPU allocation overhead)
@@ -633,7 +790,7 @@ def main():
         if args.mode in ("live", "replay"):
             frame = receiver.get_latest_frame()
             if frame is not None:
-                if not mesh_only:
+                if not mesh_only and not skip_movin_character:
                     root_pos, root_quat, dof_values = process_movin_bones_for_isaaclab(
                         frame["bones"],
                         forward_mode=args.forward_mode,
@@ -647,10 +804,10 @@ def main():
                     last_mesh_local_quats_yup = mesh_quats
                     last_mesh_root_pos_yup = mesh_root
                     if mesh_only:
-                        # In mesh-only mode, derive root pos for camera from mesh root
                         from movin_sdk_python.utils.isaac_lab_utils import yup_to_zup_vec
                         last_root_pos = yup_to_zup_vec(mesh_root)
 
+                last_frame_bones = frame["bones"]
                 has_first_frame = True
 
         elif args.mode == "bvh":
@@ -707,6 +864,65 @@ def main():
             articulation.write_root_link_velocity_to_sim(root_vel, env_ids)
             articulation.write_joint_state_to_sim(dof_pos_t, dof_vel_t, env_ids=env_ids)
 
+        # ---- Robot retargeting ----
+        if robot_enabled and has_first_frame and retargeter is not None:
+            try:
+                retarget_input = None
+
+                if args.mode in ("live", "replay") and last_frame_bones is not None:
+                    retarget_input = retargeter.process_mocap_frame(last_frame_bones)
+                elif args.mode == "bvh" and bvh_retarget_frames is not None:
+                    retarget_input = bvh_retarget_frames[bvh_frame_idx]
+
+                if retarget_input is not None:
+                    required = retargeter.get_required_bones()
+                    filtered = {k: v for k, v in retarget_input.items() if k in required}
+
+                    qpos = retargeter.retarget(filtered)
+
+                    robot_root_pos = qpos[:3].copy()
+                    robot_root_quat = qpos[3:7].copy()
+                    robot_joints = qpos[7:].copy()
+
+                    if args.robot_view == "side_by_side":
+                        robot_root_pos[0] += args.robot_offset
+                    last_robot_root_pos = robot_root_pos
+
+                    if robot_reorder_map is not None and robot_dof_reordered is not None:
+                        robot_dof_reordered[:] = 0.0
+                        n_joints = min(len(robot_joints), len(robot_reorder_map))
+                        for mj_i in range(n_joints):
+                            robot_dof_reordered[robot_reorder_map[mj_i]] = robot_joints[mj_i]
+                        robot_joints_ordered = robot_dof_reordered
+                    else:
+                        robot_joints_ordered = robot_joints
+
+                    robot_root_pose_t[0, :3] = torch.from_numpy(robot_root_pos).float()
+                    robot_root_pose_t[0, 3:] = torch.from_numpy(robot_root_quat).float()
+                    n_write = min(len(robot_joints_ordered), robot_num_dofs)
+                    robot_dof_pos_t[0, :n_write] = torch.from_numpy(
+                        robot_joints_ordered[:n_write].astype(np.float32)
+                    )
+
+                    robot_articulation.write_root_link_pose_to_sim(
+                        robot_root_pose_t, robot_env_ids
+                    )
+                    robot_articulation.write_root_link_velocity_to_sim(
+                        robot_root_vel, robot_env_ids
+                    )
+                    robot_articulation.write_joint_state_to_sim(
+                        robot_dof_pos_t, robot_dof_vel_t, env_ids=robot_env_ids
+                    )
+
+                    if args.debug and frame_count % max(1, int(control_fps * 2)) == 0:
+                        ik_err = retargeter._error1()
+                        print(f"[ROBOT DEBUG] IK error: {ik_err:.4f} | "
+                              f"Root: [{robot_root_pos[0]:.3f}, {robot_root_pos[1]:.3f}, {robot_root_pos[2]:.3f}]")
+
+            except Exception as exc:
+                if args.debug:
+                    print(f"[WARN] Retarget error: {exc}")
+
         # ---- Mesh overlay update ----
         if (
             mesh_enabled
@@ -727,10 +943,15 @@ def main():
         sim.step()
         if articulation is not None:
             articulation.update(sim.get_physics_dt())
+        if robot_articulation is not None:
+            robot_articulation.update(sim.get_physics_dt())
 
         # ---- Camera tracking ----
         if camera is not None:
-            camera.update(last_root_pos)
+            if robot_enabled and args.robot_view == "robot_only":
+                camera.update(last_robot_root_pos)
+            else:
+                camera.update(last_root_pos)
 
         # ---- One-step mode: advance one BVH frame then pause ----
         if play_mode == PlayMode.ONE_STEP:
