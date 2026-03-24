@@ -462,7 +462,10 @@ def main():
     mesh_model = None
     mesh_overlay = None
     if mesh_enabled:
-        mesh_model = MOVINMeshModel(npz_path=args.mesh_npz)
+        mesh_npz = args.mesh_npz
+        if mesh_npz is None:
+            mesh_npz = os.path.join(PROJECT_ROOT, "data", "movinman_mesh.npz")
+        mesh_model = MOVINMeshModel(npz_path=mesh_npz)
         mesh_overlay = MeshOverlay(mesh_model, prim_path=MESH_PRIM_PATH)
         print(
             f"[INFO] Mesh overlay initialized: "

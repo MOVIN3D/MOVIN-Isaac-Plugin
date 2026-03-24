@@ -54,3 +54,7 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.bak
+
+# Runtime generated
+data/usd_output/
+data/recordings/
