@@ -1,0 +1,3 @@
+[submodule "movin_sdk_python"]
+	path = movin_sdk_python
+	url = https://github.com/MOVIN3D/MOVIN-SDK-Python.git
