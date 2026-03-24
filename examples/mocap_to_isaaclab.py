@@ -107,11 +107,13 @@ from isaaclab.actuators import IdealPDActuatorCfg
 from isaaclab.sim.converters import MjcfConverterCfg, MjcfConverter
 from isaacsim.core.utils.extensions import enable_extension
 
-# Add project root to path for movin_sdk_python imports
+# Add project root and SDK submodule to path for movin_sdk_python imports
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+SDK_ROOT = os.path.join(PROJECT_ROOT, "movin_sdk_python")
+for p in (PROJECT_ROOT, SDK_ROOT):
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
 from movin_sdk_python.utils.isaac_lab_utils import (
     process_movin_bones_for_isaaclab,
