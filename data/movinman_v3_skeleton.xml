@@ -23,25 +23,25 @@
         <joint name="Spine_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
         <joint name="Spine_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
         <joint name="Spine_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-        <geom name="Spine" type="capsule" fromto="0 0 0 0 0 0.101482" size=".07" density="1000"/>
+        <geom name="Spine" type="capsule" fromto="0 0 0 0 0 0.101482" size="0.06" density="1000"/>
 
         <body name="Spine1" pos="0 0 0.101482">
           <joint name="Spine1_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
           <joint name="Spine1_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
           <joint name="Spine1_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-          <geom name="Spine1" type="capsule" fromto="0 0 0 0 0.017544 0.099502" size=".08" density="1000"/>
+          <geom name="Spine1" type="capsule" fromto="0 0 0 0 0.017544 0.099502" size="0.065" density="1000"/>
 
           <body name="Spine2" pos="0 0.017544 0.099502">
             <joint name="Spine2_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
             <joint name="Spine2_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
             <joint name="Spine2_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-            <geom name="Spine2" type="capsule" fromto="0 0 0 0 0.008805 0.100647" size=".08" density="1000"/>
+            <geom name="Spine2" type="capsule" fromto="0 0 0 0 0.008805 0.100647" size="0.07" density="1000"/>
 
             <body name="Spine3" pos="0 0.008805 0.100647">
               <joint name="Spine3_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
               <joint name="Spine3_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
               <joint name="Spine3_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-              <geom name="Spine3" type="capsule" fromto="0 0 0 0 0 0.090928" size=".08" density="1000"/>
+              <geom name="Spine3" type="capsule" fromto="0 0 0 0 0 0.015928" size="0.075" density="1000"/>
 
               <!-- Neck/Head -->
               <body name="Neck" pos="0 0 0.090928">
@@ -60,7 +60,7 @@
                     <joint name="Head_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                     <joint name="Head_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                     <joint name="Head_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                    <geom name="Head" type="sphere" size=".095" density="1000"/>
+                    <geom name="Head" type="sphere" pos="0 0 0.023434" size=".095" density="1000"/>
                   </body>
                 </body>
               </body>
@@ -107,7 +107,7 @@
                             <joint name="RightHandIndex3_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                             <joint name="RightHandIndex3_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                             <joint name="RightHandIndex3_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                            <geom name="RightHandIndex3" type="sphere" size=".006" density="1000"/>
+                            <geom name="RightHandIndex3" type="sphere" pos="0 0 0.011798" size=".006" density="1000"/>
                           </body>
                         </body>
                       </body>
@@ -128,7 +128,7 @@
                             <joint name="RightHandMiddle3_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                             <joint name="RightHandMiddle3_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                             <joint name="RightHandMiddle3_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                            <geom name="RightHandMiddle3" type="sphere" size=".006" density="1000"/>
+                            <geom name="RightHandMiddle3" type="sphere" pos="0 0 0.012447" size=".006" density="1000"/>
                           </body>
                         </body>
                       </body>
@@ -149,7 +149,7 @@
                             <joint name="RightHandPinky3_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                             <joint name="RightHandPinky3_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                             <joint name="RightHandPinky3_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                            <geom name="RightHandPinky3" type="sphere" size=".005" density="1000"/>
+                            <geom name="RightHandPinky3" type="sphere" pos="0 0 0.010087" size=".005" density="1000"/>
                           </body>
                         </body>
                       </body>
@@ -170,7 +170,7 @@
                             <joint name="RightHandRing3_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                             <joint name="RightHandRing3_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                             <joint name="RightHandRing3_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                            <geom name="RightHandRing3" type="sphere" size=".006" density="1000"/>
+                            <geom name="RightHandRing3" type="sphere" pos="0 0 0.012518" size=".006" density="1000"/>
                           </body>
                         </body>
                       </body>
@@ -191,7 +191,7 @@
                             <joint name="RightHandThumb3_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                             <joint name="RightHandThumb3_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                             <joint name="RightHandThumb3_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                            <geom name="RightHandThumb3" type="sphere" size=".008" density="1000"/>
+                            <geom name="RightHandThumb3" type="sphere" pos="0 0 0.013813" size=".008" density="1000"/>
                           </body>
                         </body>
                       </body>
@@ -242,7 +242,7 @@
                             <joint name="LeftHandIndex3_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                             <joint name="LeftHandIndex3_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                             <joint name="LeftHandIndex3_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                            <geom name="LeftHandIndex3" type="sphere" size=".006" density="1000"/>
+                            <geom name="LeftHandIndex3" type="sphere" pos="0 0 0.011798" size=".006" density="1000"/>
                           </body>
                         </body>
                       </body>
@@ -263,7 +263,7 @@
                             <joint name="LeftHandMiddle3_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                             <joint name="LeftHandMiddle3_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                             <joint name="LeftHandMiddle3_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                            <geom name="LeftHandMiddle3" type="sphere" size=".006" density="1000"/>
+                            <geom name="LeftHandMiddle3" type="sphere" pos="0 0 0.012447" size=".006" density="1000"/>
                           </body>
                         </body>
                       </body>
@@ -284,7 +284,7 @@
                             <joint name="LeftHandPinky3_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                             <joint name="LeftHandPinky3_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                             <joint name="LeftHandPinky3_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                            <geom name="LeftHandPinky3" type="sphere" size=".005" density="1000"/>
+                            <geom name="LeftHandPinky3" type="sphere" pos="0 0 0.010087" size=".005" density="1000"/>
                           </body>
                         </body>
                       </body>
@@ -305,7 +305,7 @@
                             <joint name="LeftHandRing3_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                             <joint name="LeftHandRing3_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                             <joint name="LeftHandRing3_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                            <geom name="LeftHandRing3" type="sphere" size=".006" density="1000"/>
+                            <geom name="LeftHandRing3" type="sphere" pos="0 0 0.012518" size=".006" density="1000"/>
                           </body>
                         </body>
                       </body>
@@ -326,7 +326,7 @@
                             <joint name="LeftHandThumb3_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                             <joint name="LeftHandThumb3_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                             <joint name="LeftHandThumb3_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                            <geom name="LeftHandThumb3" type="sphere" size=".008" density="1000"/>
+                            <geom name="LeftHandThumb3" type="sphere" pos="0 0 0.013813" size=".008" density="1000"/>
                           </body>
                         </body>
                       </body>

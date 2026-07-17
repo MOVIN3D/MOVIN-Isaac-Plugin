@@ -25,7 +25,9 @@ Example:
 """
 
 import argparse
+import math
 import os
+import re
 import sys
 import xml.etree.ElementTree as ET
 
@@ -266,7 +268,30 @@ def build_geom_xml(node, geoms):
     size = template.get("size", ".05")
 
     if gtype == "capsule":
-        fromto = "0 0 0 " + fmt_vec(capsule_endpoint(node))
+        endpoint = capsule_endpoint(node)
+        radius = float(size.split()[0])
+        # When the child's geom is much thinner than this capsule, end the
+        # capsule one radius short of the child joint -- a full-length end cap
+        # would swallow the child (e.g. the V3 chest capsule burying the neck).
+        # Similar-girth neighbors keep the full segment so stacked segments
+        # (the spine chain) read as one smooth column.
+        child = primary_child(node)
+        child_radius = None
+        if child is not None:
+            child_template = resolve_template(child.name, geoms, "geom")
+            if child_template is not None and child_template.get(
+                "type", "sphere"
+            ) in ("capsule", "sphere"):
+                child_radius = float(child_template.get("size", ".05").split()[0])
+        length = math.sqrt(sum(c * c for c in endpoint))
+        if (
+            length > 1e-9
+            and child_radius is not None
+            and child_radius < 0.6 * radius
+        ):
+            eff = max(length - radius, 0.005)
+            endpoint = tuple(c * (eff / length) for c in endpoint)
+        fromto = "0 0 0 " + fmt_vec(endpoint)
         return ('<geom name="%s" type="capsule" fromto="%s" size="%s" density="%s"/>'
                 % (name, fromto, size, density))
     if gtype == "box":
@@ -275,6 +300,16 @@ def build_geom_xml(node, geoms):
                 % (name, pos, size, density))
     # sphere (or anything else): reuse pos only if the reference set one.
     pos = template.get("pos")
+    if pos is None and gtype == "sphere":
+        # Leaf spheres (the head) sit at the joint -- the skull base -- which
+        # buries the neck under the sphere's lower half.  Center the sphere
+        # midway toward the End Site so it occupies the actual head volume.
+        end_sites = [c for c in node.children if c.is_end_site]
+        body_children = [c for c in node.children if not c.is_end_site]
+        if end_sites and not body_children:
+            center = tuple(0.5 * c for c in yup_to_zup(end_sites[0].offset))
+            if any(abs(c) > 1e-9 for c in center):
+                pos = fmt_vec(center)
     pos_attr = ' pos="%s"' % pos if pos is not None else ""
     return ('<geom name="%s" type="%s"%s size="%s" density="%s"/>'
             % (name, gtype, pos_attr, size, density))
@@ -333,11 +368,39 @@ def build_actuators(root, gears):
     return lines
 
 
+def apply_spine_taper(root, geoms):
+    """Distribute waist-to-chest capsule radii across spine chains deeper than 2.
+
+    The reference skeleton has two spine segments (.07 waist, .08 chest);
+    repeating the chest radius across a deeper chain (e.g. V3's four segments)
+    produces an oversized torso that buries the neck, so interpolate instead.
+    """
+    chain = []
+    node = next((c for c in root.children if c.name == "Spine"), None)
+    while node is not None and re.match(r"^Spine\d*$", node.name):
+        chain.append(node.name)
+        node = next(
+            (c for c in node.children if re.match(r"^Spine\d*$", c.name)), None
+        )
+    if len(chain) < 3:
+        return
+    lo, hi = 0.06, 0.075
+    for i, name in enumerate(chain):
+        radius = lo + (hi - lo) * (i / (len(chain) - 1))
+        template = dict(
+            resolve_template(name, geoms, "geom")
+            or {"type": "capsule", "density": "1000"}
+        )
+        template["size"] = fmt(radius)
+        geoms[name] = template
+
+
 def generate_mjcf(bvh_path, model_name, reference_path):
     """Parse a T-pose BVH and return the full MJCF document as a string."""
     root = parse_bvh_hierarchy(bvh_path)
     hips_height = compute_hips_height(root)
     geoms, childclass, gears = load_reference(reference_path)
+    apply_spine_taper(root, geoms)
 
     lines = ['<mujoco model="%s">' % model_name]
     lines.append('  <compiler angle="radian"/>')
