@@ -12,6 +12,9 @@ Usage:
     # BVH playback (full skeleton with hands)
     python examples/mocap_to_isaaclab.py --mode bvh --bvh_file data/kthjazz_*.bvh
 
+    # BVH playback with the MOVINMan V3 skeleton (auto-detected from the file)
+    python examples/mocap_to_isaaclab.py --mode bvh --bvh_file data/test_V3.bvh
+
     # BVH playback with mesh overlay
     python examples/mocap_to_isaaclab.py --mode bvh --bvh_file examples/Locomotion.bvh --view_mode mesh_skeleton
 
@@ -76,6 +79,11 @@ parser.add_argument("--debug", action="store_true",
                     help="Print FPS and debug info")
 parser.add_argument("--print_joints", action="store_true",
                     help="Print joint names and ordering at startup, then exit")
+parser.add_argument("--preset", type=str, default="auto",
+                    choices=["auto", "movinman", "movinman_v3"],
+                    help="Skeleton preset: 'auto' detects from the data source (default: auto)")
+parser.add_argument("--max_frames", type=int, default=None,
+                    help="Exit the main loop cleanly after N frames (for headless testing)")
 parser.add_argument(
     "--forward_mode",
     type=str,
@@ -139,6 +147,11 @@ from movin_sdk_python.utils.movinman_mesh_utils import (
     MOVINMeshModel,
     extract_movin_local_quats_yup,
     extract_bvh_local_quats_yup,
+)
+from movin_sdk_python.utils.skeleton_presets import (
+    get_preset,
+    detect_preset_from_bone_names,
+    MOVINMAN_PRESET,
 )
 
 CHARACTER_ROOT_PATH = "/World/envs/env_0/character"
@@ -483,6 +496,98 @@ def main():
     skeleton_visible = args.view_mode in ("skeleton", "mesh_skeleton") and not skip_movin_character
     mesh_only = args.view_mode == "mesh" and not skip_movin_character
 
+    # ---- Resolve skeleton preset (before scene/articulation/retargeter) ----
+    # Live: start the receiver here so it is already streaming while the scene
+    #   builds; it is reused for the main loop.  bvh: read the file once and
+    #   reuse bvh_data.  replay: peek the recording's first frame.
+    receiver = None
+    bvh_data = None
+    explicit_preset = args.preset != "auto"
+
+    if args.mode == "live":
+        from movin_sdk_python.mocap_receiver.mocap_receiver import MocapReceiver
+        # NOTE: the recorder is attached later (data source setup) so that
+        # --record captures only the main loop, not the scene-build lead-in.
+        receiver = MocapReceiver(port=args.port)
+        receiver.start()
+        print(f"[INFO] Live mocap receiver started on port {args.port}")
+
+        if explicit_preset:
+            preset = get_preset(args.preset)
+        else:
+            print("[INFO] Waiting for mocap stream to detect skeleton preset... (pass --preset to skip)")
+            first_frame = None
+            while first_frame is None and simulation_app.is_running():
+                # Pump the Kit app so the window stays responsive and
+                # is_running() reflects a window close while we wait.
+                simulation_app.update()
+                first_frame = receiver.get_latest_frame()
+                if first_frame is None:
+                    time.sleep(0.05)
+            if first_frame is None:
+                print("[WARN] No mocap frame received; falling back to movinman")
+                preset = MOVINMAN_PRESET
+            else:
+                preset = detect_preset_from_bone_names(
+                    [b["bone_name"] for b in first_frame["bones"]]
+                )
+
+    elif args.mode == "replay":
+        if not args.recording:
+            print("ERROR: --recording is required in replay mode")
+            simulation_app.close()
+            return
+        if not os.path.exists(args.recording):
+            print(f"ERROR: Recording file not found: {args.recording}")
+            simulation_app.close()
+            return
+        if explicit_preset:
+            preset = get_preset(args.preset)
+        else:
+            from movin_sdk_python.recording import peek_first_frame
+            try:
+                first_frame = peek_first_frame(args.recording)
+            except Exception as exc:
+                print(f"[WARN] Failed to peek recording ({exc})")
+                first_frame = None
+            if first_frame is None:
+                print("[WARN] Could not peek recording for preset detection; falling back to movinman")
+                preset = MOVINMAN_PRESET
+            else:
+                preset = detect_preset_from_bone_names(
+                    [b["bone_name"] for b in first_frame["bones"]]
+                )
+
+    elif args.mode == "bvh":
+        bvh_file = args.bvh_file
+        if not os.path.exists(bvh_file):
+            print(f"ERROR: BVH file not found: {bvh_file}")
+            simulation_app.close()
+            return
+        bvh_data = read_bvh(bvh_file)
+        detected = detect_preset_from_bone_names(bvh_data.bones)
+        if explicit_preset:
+            preset = get_preset(args.preset)
+            if preset.name != detected.name:
+                print(f"[WARN] --preset {preset.name} but BVH detected as "
+                      f"{detected.name}; using {preset.name}")
+        else:
+            preset = detected
+
+    print(f"[INFO] Skeleton preset: {preset.name}")
+
+    # ---- Mesh availability for this preset ----
+    if mesh_enabled and preset.mesh_npz_filename is None and args.mesh_npz is None:
+        if args.view_mode == "mesh":
+            print(f"ERROR: mesh overlay unavailable for preset '{preset.name}' "
+                  f"(no mesh asset); nothing to render in --view_mode mesh")
+            if receiver is not None:
+                receiver.stop()
+            simulation_app.close()
+            return
+        print(f"[WARN] mesh overlay unavailable for preset '{preset.name}'; disabling mesh")
+        mesh_enabled = False
+
     # ---- Determine control FPS ----
     if args.mode == "bvh":
         control_fps = get_bvh_fps(args.bvh_file)
@@ -506,11 +611,13 @@ def main():
     # ---- Character (skeleton articulation) ----
     articulation = None
     if not mesh_only and not skip_movin_character:
-        mjcf_path = os.path.join(PROJECT_ROOT, "data", "movinman_skeleton.xml")
+        mjcf_path = os.path.join(PROJECT_ROOT, "data", preset.mjcf_filename)
         print(f"[INFO] Converting MJCF: {mjcf_path}")
         usd_path = convert_mjcf_to_usd(mjcf_path)
         print(f"[INFO] USD path: {usd_path}")
-        articulation = create_articulation(usd_path)
+        articulation = create_articulation(
+            usd_path, start_pos=(0.0, 0.0, preset.default_hips_height)
+        )
 
     # ---- Robot retargeting setup ----
     robot_articulation = None
@@ -524,6 +631,7 @@ def main():
             robot_type=args.robot,
             human_height=args.human_height,
             verbose=args.debug,
+            source_preset=preset.name,
         )
 
         import mujoco as _mj
@@ -562,8 +670,8 @@ def main():
     if mesh_enabled:
         mesh_npz = args.mesh_npz
         if mesh_npz is None:
-            mesh_npz = os.path.join(PROJECT_ROOT, "data", "movinman_mesh.npz")
-        mesh_model = MOVINMeshModel(npz_path=mesh_npz)
+            mesh_npz = os.path.join(PROJECT_ROOT, "data", preset.mesh_npz_filename)
+        mesh_model = MOVINMeshModel(npz_path=mesh_npz, expected_bone_names=preset.body_names)
         mesh_overlay = MeshOverlay(mesh_model, prim_path=MESH_PRIM_PATH)
         print(
             f"[INFO] Mesh overlay initialized: "
@@ -588,12 +696,14 @@ def main():
             for i, name in enumerate(isaac_joint_names):
                 print(f"  [{i:3d}] {name}")
             print(f"\n=== Skeleton Joint Order (expected) ===")
-            for i, bone in enumerate(SKELETON_JOINT_BONES):
+            for i, bone in enumerate(preset.joint_bones):
                 print(f"  [{i*3:3d}-{i*3+2:3d}] {bone}_x/y/z")
+            if receiver is not None:
+                receiver.stop()
             simulation_app.close()
             return
 
-        reorder_map = build_dof_reorder_map(isaac_joint_names)
+        reorder_map = build_dof_reorder_map(isaac_joint_names, preset.joint_bones)
         if reorder_map is not None:
             print(f"[INFO] DOF reorder map built (Isaac Lab has different joint ordering)")
         else:
@@ -697,57 +807,44 @@ def main():
         camera = CameraTracker(sim, pos=[0.0, -5.0, 3.0], target=[0.0, 0.0, 1.0])
 
     # ---- Data source setup ----
-    receiver = None
-    bvh_data = None
+    # The live receiver and bvh_data were created during preset resolution;
+    # reuse them.  The replay receiver is created here (peek handled detection).
     bvh_frame_idx = 0
     bvh_scale = 1.0
     bvh_retarget_frames = None
 
     if args.mode == "live":
-        from movin_sdk_python.mocap_receiver.mocap_receiver import MocapReceiver
-        recorder = None
         if args.record:
+            # Attach the recorder only now so the recording starts with the
+            # main loop rather than during scene build / preset detection.
             from movin_sdk_python.recording import OscRecorder
-            recorder = OscRecorder(args.record, stream_type="movin")
-        receiver = MocapReceiver(port=args.port, recorder=recorder)
-        receiver.start()
-        print(f"[INFO] Live mocap receiver started on port {args.port}")
+            receiver.recorder = OscRecorder(args.record, stream_type="movin")
+            print(f"[INFO] Recording to {args.record}")
+        print(f"[INFO] Live mocap receiver running on port {args.port}")
 
     elif args.mode == "replay":
-        if not args.recording:
-            print("ERROR: --recording is required in replay mode")
-            simulation_app.close()
-            return
         from movin_sdk_python.recording import ReplayMocapReceiver
         receiver = ReplayMocapReceiver(args.recording, realtime=True, loop=True)
         receiver.start()
         print(f"[INFO] Replay receiver started from {args.recording}")
 
     elif args.mode == "bvh":
-        bvh_file = args.bvh_file
-        if not os.path.exists(bvh_file):
-            print(f"ERROR: BVH file not found: {bvh_file}")
-            simulation_app.close()
-            return
-
-        bvh_data = read_bvh(bvh_file)
-
         if args.bvh_scale is not None:
             bvh_scale = args.bvh_scale
         else:
             bvh_scale = detect_bvh_scale(bvh_data)
 
         num_frames = bvh_data.quats.shape[0]
-        print(f"[INFO] Loaded BVH: {bvh_file}")
+        print(f"[INFO] Loaded BVH: {args.bvh_file}")
         print(f"[INFO]   Bones: {len(bvh_data.bones)}, Frames: {num_frames}, FPS: {control_fps:.1f}")
         print(f"[INFO]   Position scale: {bvh_scale} ({'cm->m' if bvh_scale < 1.0 else 'already meters'})")
 
         if robot_enabled and retargeter is not None:
-            bvh_retarget_frames, _, _, _ = retargeter.load_bvh(bvh_file)
+            bvh_retarget_frames, _, _, _ = retargeter.load_bvh(args.bvh_file)
             print(f"[INFO] Precomputed {len(bvh_retarget_frames)} BVH retarget frames")
 
     # ---- Persistent state for kinematic driving ----
-    last_root_pos = np.array([0.0, 0.0, DEFAULT_HIPS_HEIGHT])
+    last_root_pos = np.array([0.0, 0.0, preset.default_hips_height])
     last_root_quat = np.array([1.0, 0.0, 0.0, 0.0])
     last_dof_values = np.zeros(num_dofs)
     last_mesh_local_quats_yup = None
@@ -767,6 +864,7 @@ def main():
 
     # ---- Main loop ----
     frame_count = 0
+    total_steps = 0  # never reset; used for the --max_frames limit
     last_fps_time = time.time()
     playback_start_time = None  # wall-clock time when playback started
     playback_start_frame = 0    # BVH frame index at playback start
@@ -793,6 +891,7 @@ def main():
                 if not mesh_only and not skip_movin_character:
                     root_pos, root_quat, dof_values = process_movin_bones_for_isaaclab(
                         frame["bones"],
+                        skeleton_bone_names=preset.joint_bones,
                         forward_mode=args.forward_mode,
                     )
                     last_root_pos = root_pos
@@ -800,7 +899,9 @@ def main():
                     last_dof_values = dof_values
 
                 if mesh_enabled:
-                    mesh_quats, mesh_root = extract_movin_local_quats_yup(frame["bones"])
+                    mesh_quats, mesh_root = extract_movin_local_quats_yup(
+                        frame["bones"], skeleton_body_names=preset.body_names
+                    )
                     last_mesh_local_quats_yup = mesh_quats
                     last_mesh_root_pos_yup = mesh_root
                     if mesh_only:
@@ -827,7 +928,9 @@ def main():
 
             if not mesh_only:
                 root_pos, root_quat, dof_values = process_bvh_frame_for_isaaclab(
-                    frame_quats, frame_pos, bvh_data.bones, forward_mode=args.forward_mode
+                    frame_quats, frame_pos, bvh_data.bones,
+                    skeleton_bone_names=preset.joint_bones,
+                    forward_mode=args.forward_mode,
                 )
                 root_pos = root_pos * bvh_scale
                 last_root_pos = root_pos
@@ -836,7 +939,8 @@ def main():
 
             if mesh_enabled:
                 mesh_quats, mesh_root = extract_bvh_local_quats_yup(
-                    frame_quats, frame_pos, bvh_data.bones
+                    frame_quats, frame_pos, bvh_data.bones,
+                    skeleton_body_names=preset.body_names,
                 )
                 last_mesh_local_quats_yup = mesh_quats
                 last_mesh_root_pos_yup = mesh_root * bvh_scale
@@ -956,6 +1060,12 @@ def main():
         # ---- One-step mode: advance one BVH frame then pause ----
         if play_mode == PlayMode.ONE_STEP:
             play_mode = PlayMode.PAUSE
+
+        # ---- Max frames limit (headless testing) ----
+        total_steps += 1
+        if args.max_frames is not None and total_steps >= args.max_frames:
+            print(f"[INFO] Reached --max_frames ({args.max_frames}), exiting main loop")
+            break
 
         # ---- FPS tracking ----
         frame_count += 1
