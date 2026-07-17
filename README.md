@@ -24,11 +24,16 @@ MOVIN-Isaac-Plugin/
   movin_sdk_python/              # git submodule (MOVIN-SDK-Python)
   examples/
     mocap_to_isaaclab.py         # MOVIN -> Isaac Lab visualization
+  scripts/
+    generate_skeleton_mjcf.py    # Generate a skeleton MJCF from a T-pose BVH
   data/
-    movinman_skeleton.xml        # MOVINMan MJCF skeleton (51 bones)
-    movinman_mesh.npz            # Pre-extracted mesh for LBS overlay
+    movinman_skeleton.xml        # MOVINMan MJCF skeleton (51 bones, legacy preset)
+    movinman_v3_skeleton.xml     # MOVINManV3 MJCF skeleton (54 joints, generated)
+    movinman_mesh.npz            # Pre-extracted mesh for LBS overlay (legacy preset only)
     MOVINMan_dump.xml            # MOVINMan FBX dump
+    MOVINManV3_Tpose.bvh         # MOVINManV3 reference T-pose (used to generate the MJCF)
     Locomotion.bvh               # Sample BVH for testing
+    test_V3.bvh                  # Sample MOVINManV3 BVH for testing
 ```
 
 ## Live Mocap from MOVIN Studio
@@ -97,6 +102,10 @@ python examples/mocap_to_isaaclab.py --mode bvh \
 # Mesh only (no skeleton)
 python examples/mocap_to_isaaclab.py --mode bvh \
     --bvh_file data/Locomotion.bvh --view_mode mesh
+
+# MOVINManV3 skeleton (preset auto-detected from the file)
+python examples/mocap_to_isaaclab.py --mode bvh \
+    --bvh_file data/test_V3.bvh
 ```
 
 ## Robot Retargeting
@@ -136,11 +145,38 @@ python examples/mocap_to_isaaclab.py --mode live --port 11235 \
 | `unitree_g1` | Unitree G1 (standard) | 29 |
 | `unitree_g1_with_hands` | Unitree G1 with hands | 43 |
 
+## Skeleton Presets
+
+Two MOVINMan skeleton layouts are supported:
+
+- `movinman` -- legacy skeleton (51 bodies)
+- `movinman_v3` -- MOVINManV3 skeleton (54 joints), adding `Spine2`, `Spine3`, and `Neck1` to the spine/neck chain, with a full finger set
+
+By default (`--preset auto`) the preset is detected automatically, per mode:
+
+- **bvh**: detected from the joint names in the BVH file
+- **replay**: detected by peeking at the recording's first frame
+- **live**: waits for the first mocap frame before starting (pass `--preset movinman` or `--preset movinman_v3` explicitly to skip the wait)
+
+Pass `--preset movinman` or `--preset movinman_v3` to force a specific preset instead of auto-detecting.
+
+Mesh overlay (`--view_mode mesh` / `mesh_skeleton`) is currently only available for the legacy `movinman` preset -- with `movinman_v3` there is no mesh asset yet, so the script prints a warning and falls back to skeleton-only rendering.
+
+Robot retargeting works with both presets; with `movinman_v3` the G1 torso is automatically mapped to `Spine3` via a V3-specific IK config.
+
+`data/movinman_v3_skeleton.xml` is generated from `data/MOVINManV3_Tpose.bvh` and can be regenerated with:
+
+```bash
+python scripts/generate_skeleton_mjcf.py data/MOVINManV3_Tpose.bvh \
+    data/movinman_v3_skeleton.xml --model-name movinman_v3
+```
+
 ## Options
 
 | Option | Values | Description |
 |--------|--------|-------------|
 | `--mode` | `live`, `bvh`, `replay` | Input source |
+| `--preset` | `auto`, `movinman`, `movinman_v3` | Skeleton preset (default: `auto`, detected from the data source) |
 | `--port` | int (default: 11235) | UDP port for live mocap |
 | `--bvh_file` | `<path>` | BVH file for playback mode |
 | `--bvh_scale` | float | Position scale factor (auto-detected if not set) |
@@ -155,6 +191,7 @@ python examples/mocap_to_isaaclab.py --mode live --port 11235 \
 | `--mesh_npz` | `<path>` | Path to `movinman_mesh.npz` (auto-detected if not set) |
 | `--headless` | | No GUI window |
 | `--debug` | | Print FPS and debug info |
+| `--max_frames` | int | Exit the main loop after N frames (mainly for headless testing) |
 
 ## Viewer Controls
 
