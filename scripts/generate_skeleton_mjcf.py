@@ -76,7 +76,7 @@ def parse_bvh_hierarchy(path):
     """
     Parse the HIERARCHY section of a BVH file, including End Sites.
 
-    ``read_bvh`` in the SDK discards End Sites, so this tiny parser reads them
+    ``read_bvh`` in examples/bvh_utils.py discards End Sites, so this tiny parser reads them
     itself (leaf bodies use the End Site offset to orient their geom).
 
     Args:

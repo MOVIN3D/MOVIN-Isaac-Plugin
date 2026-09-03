@@ -24,6 +24,7 @@ MOVIN-Isaac-Plugin/
   movin_sdk_python/              # git submodule (MOVIN-SDK-Python)
   examples/
     mocap_to_isaaclab.py         # MOVIN -> Isaac Lab visualization
+    bvh_utils.py                 # BVH loader + BVH->Isaac/retarget conversion (plugin-owned)
   scripts/
     generate_skeleton_mjcf.py    # Generate a skeleton MJCF from a T-pose BVH
   data/

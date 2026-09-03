@@ -135,23 +135,27 @@ for p in (PROJECT_ROOT, SDK_ROOT):
 
 from movin_sdk_python.utils.isaac_lab_utils import (
     process_movin_bones_for_isaaclab,
-    process_bvh_frame_for_isaaclab,
     build_dof_reorder_map,
     FORWARD_MODE_CHOICES,
     SKELETON_BODY_NAMES,
     SKELETON_JOINT_BONES,
     DEFAULT_HIPS_HEIGHT,
 )
-from movin_sdk_python.utils.bvh_loader import read_bvh
 from movin_sdk_python.utils.movinman_mesh_utils import (
     MOVINMeshModel,
     extract_movin_local_quats_yup,
-    extract_bvh_local_quats_yup,
 )
 from movin_sdk_python.utils.skeleton_presets import (
     get_preset,
     detect_preset_from_bone_names,
     MOVINMAN_PRESET,
+)
+# BVH support is owned by the plugin (removed from the SDK in a8c012a)
+from bvh_utils import (
+    read_bvh,
+    load_bvh_file,
+    process_bvh_frame_for_isaaclab,
+    extract_bvh_local_quats_yup,
 )
 
 CHARACTER_ROOT_PATH = "/World/envs/env_0/character"
@@ -840,7 +844,7 @@ def main():
         print(f"[INFO]   Position scale: {bvh_scale} ({'cm->m' if bvh_scale < 1.0 else 'already meters'})")
 
         if robot_enabled and retargeter is not None:
-            bvh_retarget_frames, _, _, _ = retargeter.load_bvh(args.bvh_file)
+            bvh_retarget_frames, _, _, _ = load_bvh_file(args.bvh_file, human_height=args.human_height)
             print(f"[INFO] Precomputed {len(bvh_retarget_frames)} BVH retarget frames")
 
     # ---- Persistent state for kinematic driving ----
