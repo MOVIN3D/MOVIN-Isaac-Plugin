@@ -3,7 +3,8 @@ MOVIN Mocap to Isaac Lab Visualization.
 
 Receives real-time mocap data from MOVIN Studio (or plays back a BVH file)
 and drives a humanoid skeleton in Isaac Lab.  Optionally renders a high-fidelity
-surface mesh overlay via Linear Blend Skinning from the MOVINMan.fbx model.
+surface mesh overlay via Linear Blend Skinning from the character mesh of the
+detected preset (data/movinman_mesh.npz or data/movinman_v3_mesh.npz).
 
 Usage:
     # BVH playback (body-only)
@@ -14,6 +15,7 @@ Usage:
 
     # BVH playback with the MOVINMan V3 skeleton (auto-detected from the file)
     python examples/mocap_to_isaaclab.py --mode bvh --bvh_file data/test_V3.bvh
+    python examples/mocap_to_isaaclab.py --mode bvh --bvh_file data/test_V3.bvh --view_mode mesh_skeleton
 
     # BVH playback with mesh overlay
     python examples/mocap_to_isaaclab.py --mode bvh --bvh_file examples/Locomotion.bvh --view_mode mesh_skeleton
@@ -64,7 +66,7 @@ parser.add_argument("--view_mode", type=str, default="skeleton",
                     choices=["skeleton", "mesh", "mesh_skeleton"],
                     help="Visualization mode: skeleton only, mesh only, or both")
 parser.add_argument("--mesh_npz", type=str, default=None,
-                    help="Path to movinman_mesh.npz (auto-detected if not set)")
+                    help="Mesh NPZ for the overlay (default: the detected preset's asset in data/)")
 parser.add_argument("--robot", type=str, default=None,
                     choices=["unitree_g1", "unitree_g1_with_hands"],
                     help="Enable robot retargeting with the specified robot type")

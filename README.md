@@ -27,12 +27,15 @@ MOVIN-Isaac-Plugin/
     bvh_utils.py                 # BVH loader + BVH->Isaac/retarget conversion (plugin-owned)
   scripts/
     generate_skeleton_mjcf.py    # Generate a skeleton MJCF from a T-pose BVH
+    extract_movinman_mesh.py     # Extract mesh + skin weights from a MOVIN FBX into an NPZ (runs in Blender)
   tests/
     test_skeleton_assets.py      # Checks the V3 MJCF against its T-pose and the SDK preset
+    test_mesh_assets.py          # Checks the V3 mesh NPZ against the SDK LBS path and the T-pose
   data/
     movinman_skeleton.xml        # MOVINMan MJCF skeleton (51 bones, legacy preset)
     movinman_v3_skeleton.xml     # MOVINManV3 MJCF skeleton (54 joints, generated)
-    movinman_mesh.npz            # Pre-extracted mesh for LBS overlay (legacy preset only)
+    movinman_mesh.npz            # Pre-extracted mesh for LBS overlay (legacy preset)
+    movinman_v3_mesh.npz         # Pre-extracted mesh for LBS overlay (movinman_v3 preset)
     MOVINMan_dump.xml            # MOVINMan FBX dump
     MOVINman_V3_local_rotation_identity.fbx
                                  # MOVINManV3 rig with identity local rotations in the bind pose (skinned mesh)
@@ -166,7 +169,15 @@ By default (`--preset auto`) the preset is detected automatically, per mode:
 
 Pass `--preset movinman` or `--preset movinman_v3` to force a specific preset instead of auto-detecting.
 
-Mesh overlay (`--view_mode mesh` / `mesh_skeleton`) is currently only available for the legacy `movinman` preset -- with `movinman_v3` there is no mesh asset yet, so the script prints a warning and falls back to skeleton-only rendering.
+Mesh overlay (`--view_mode mesh` / `mesh_skeleton`) is available for both presets: `movinman` uses `data/movinman_mesh.npz` and `movinman_v3` uses `data/movinman_v3_mesh.npz`. Pass `--mesh_npz` to use another asset. A preset without a mesh asset prints a warning and falls back to skeleton-only rendering.
+
+`data/movinman_v3_mesh.npz` is extracted from the skinned mesh of `data/MOVINman_V3_local_rotation_identity.fbx` (44,402 vertices, 4 influences per vertex) with Blender's bundled FBX importer; the script checks that every joint's rest rotation is identity, which is what makes the NPZ's translation-only bind frames valid:
+
+```bash
+blender -b --python scripts/extract_movinman_mesh.py -- \
+    --fbx data/MOVINman_V3_local_rotation_identity.fbx \
+    --out data/movinman_v3_mesh.npz --preset movinman_v3
+```
 
 Robot retargeting works with both presets; with `movinman_v3` the G1 torso is automatically mapped to `Spine3` via a V3-specific IK config.
 
@@ -197,7 +208,7 @@ python scripts/generate_skeleton_mjcf.py \
 | `--human_height` | float (default: 1.75) | Human height for retargeting scaling |
 | `--robot_view` | `side_by_side`, `robot_only`, `overlay` | Robot display mode |
 | `--robot_offset` | float (default: 2.0) | X offset for side-by-side view |
-| `--mesh_npz` | `<path>` | Path to `movinman_mesh.npz` (auto-detected if not set) |
+| `--mesh_npz` | `<path>` | Mesh NPZ for the overlay (default: the preset's asset in `data/`) |
 | `--headless` | | No GUI window |
 | `--debug` | | Print FPS and debug info |
 | `--max_frames` | int | Exit the main loop after N frames (mainly for headless testing) |
