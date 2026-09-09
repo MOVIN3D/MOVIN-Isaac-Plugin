@@ -9,6 +9,17 @@ non-root body, and per-body geoms mirrored (by name) from the legacy skeleton.
 Coordinate convention: BVH offsets are Y-up meters; MJCF is Z-up.  A point is
 mapped ``(x, y, z)_yup -> (x, -z, y)_zup`` (matching ``yup_to_zup_vec``).
 
+Rest-pose convention: the input must be a *local-rotation-identity* T-pose export
+(``data/MOVINman_V3_local_rotation_identity_tpose.bvh``): every OFFSET is the
+joint's translation in its parent's local (rest-rotated) frame, which is exactly
+the ``p`` MOVIN Studio streams and the OFFSET of Studio's actor BVH exports.  The
+generated bodies therefore sit in the same frames the streamed / BVH local
+rotations are expressed in, so those rotations drive the hinges directly with no
+rest-pose removal.  (The older ``MOVINManV3_Tpose.bvh`` had world-aligned offsets
+-- finger rest rotations baked into the OFFSETs -- and must not be used here.)
+The zero pose of the generated MJCF is the identity-local-rotation pose, i.e. the
+V3 fingers point straight along the hand until the first frame arrives.
+
 Geoms are keyed by body NAME against a reference MJCF (default
 ``data/movinman_skeleton.xml``): a body that exists in the reference reuses its
 geom type/size/density, and capsule ``fromto`` endpoints are recomputed toward the
@@ -20,7 +31,8 @@ Usage:
     python scripts/generate_skeleton_mjcf.py <tpose.bvh> <out.xml> [--model-name NAME]
 
 Example:
-    python scripts/generate_skeleton_mjcf.py data/MOVINManV3_Tpose.bvh \
+    python scripts/generate_skeleton_mjcf.py \
+        data/MOVINman_V3_local_rotation_identity_tpose.bvh \
         data/movinman_v3_skeleton.xml --model-name movinman_v3
 """
 
@@ -38,14 +50,14 @@ DEFAULT_REFERENCE_MJCF = os.path.join(
 )
 
 # Section comments emitted just before the named body opens (mirrors the legacy
-# file's hand-authored comments).  Bodies not listed here emit no comment.
+# file's hand-authored comments).  Bodies not listed here emit no comment; the
+# "<Side> hand fingers" comment is emitted before the first child of a *Hand body
+# (see ``section_comment``) so it does not depend on the finger order of the BVH.
 SECTION_COMMENTS = {
     "Spine": "Spine chain",
     "Neck": "Neck/Head",
     "RightShoulder": "Right arm chain",
-    "RightHandIndex1": "Right hand fingers",
     "LeftShoulder": "Left arm chain",
-    "LeftHandIndex1": "Left hand fingers",
     "RightUpLeg": "Right leg chain",
     "LeftUpLeg": "Left leg chain",
 }
@@ -60,6 +72,10 @@ TEMPLATE_FALLBACK = {
 # Per-axis hinge definitions applied to every non-root body.
 HINGE_AXES = (("x", "1 0 0"), ("y", "0 1 0"), ("z", "0 0 1"))
 HINGE_RANGE = "-3.14159 3.14159"
+
+# A leaf's End Site is trusted as its tip direction only when it roughly
+# continues the incoming bone (see ``leaf_tip_offset``).
+END_SITE_MAX_DEVIATION_DEG = 45.0
 
 
 class BvhNode:
@@ -195,17 +211,46 @@ def primary_child(node):
     return body_children[0]
 
 
+def leaf_tip_offset(node):
+    """Tip vector (Z-up, in the body's own frame) of a leaf body; None for non-leaves.
+
+    MOVIN Studio exports every End Site as ``(0, length, 0)``: the leaf bone's
+    own length pointing straight up whatever the bone's direction.  That is fine
+    for the Head (the neck continues upward) but would put a finger tip on the
+    back of the last knuckle -- on the nail -- instead of past it.  So the End
+    Site direction is used only when it stays within
+    ``END_SITE_MAX_DEVIATION_DEG`` of the incoming bone (the leaf's own OFFSET,
+    which is also expressed in the leaf's frame because the rest pose has
+    identity local rotations); otherwise the tip continues the incoming bone by
+    the End Site's length.  Leaves without an End Site continue the incoming
+    bone by its own length.
+    """
+    if any(not c.is_end_site for c in node.children):
+        return None
+    incoming = yup_to_zup(node.offset)
+    in_len = math.sqrt(sum(c * c for c in incoming))
+    end_sites = [c for c in node.children if c.is_end_site]
+    end = yup_to_zup(end_sites[0].offset) if end_sites else None
+    end_len = math.sqrt(sum(c * c for c in end)) if end is not None else 0.0
+    if end is not None and end_len > 1e-9:
+        if in_len < 1e-9:
+            return end
+        cos = sum(a * b for a, b in zip(end, incoming)) / (end_len * in_len)
+        if cos >= math.cos(math.radians(END_SITE_MAX_DEVIATION_DEG)):
+            return end
+        return tuple(c * (end_len / in_len) for c in incoming)
+    if in_len > 1e-9:
+        return incoming
+    return None
+
+
 def capsule_endpoint(node):
-    """Local MJCF endpoint a capsule reaches toward: primary child, else End Site."""
+    """Local MJCF endpoint a capsule reaches toward: primary child, else the leaf tip."""
     child = primary_child(node)
     if child is not None:
         endpoint = yup_to_zup(child.offset)
     else:
-        end_sites = [c for c in node.children if c.is_end_site]
-        if end_sites:
-            endpoint = yup_to_zup(end_sites[0].offset)
-        else:
-            endpoint = (0.0, 0.0, 0.05)
+        endpoint = leaf_tip_offset(node) or (0.0, 0.0, 0.05)
     if all(abs(c) < 1e-9 for c in endpoint):
         endpoint = (0.0, 0.0, 0.05)
     return endpoint
@@ -301,13 +346,13 @@ def build_geom_xml(node, geoms):
     # sphere (or anything else): reuse pos only if the reference set one.
     pos = template.get("pos")
     if pos is None and gtype == "sphere":
-        # Leaf spheres (the head) sit at the joint -- the skull base -- which
-        # buries the neck under the sphere's lower half.  Center the sphere
-        # midway toward the End Site so it occupies the actual head volume.
-        end_sites = [c for c in node.children if c.is_end_site]
-        body_children = [c for c in node.children if not c.is_end_site]
-        if end_sites and not body_children:
-            center = tuple(0.5 * c for c in yup_to_zup(end_sites[0].offset))
+        # Leaf spheres (head, finger tips) sit at the joint -- the skull base,
+        # the last knuckle -- which buries the neck under the head's lower half
+        # and leaves the distal phalanx bare.  Center the sphere midway along
+        # the leaf's tip vector so it occupies the actual head / finger-tip volume.
+        tip = leaf_tip_offset(node)
+        if tip is not None:
+            center = tuple(0.5 * c for c in tip)
             if any(abs(c) > 1e-9 for c in center):
                 pos = fmt_vec(center)
     pos_attr = ' pos="%s"' % pos if pos is not None else ""
@@ -315,13 +360,30 @@ def build_geom_xml(node, geoms):
             % (name, gtype, pos_attr, size, density))
 
 
-def emit_body(node, depth, hips_height, geoms, childclass, lines):
+def section_comment(node, parent, is_first_child):
+    """Section comment to emit before ``node`` opens, or None.
+
+    Fixed comments come from ``SECTION_COMMENTS``; the first finger under a
+    ``RightHand`` / ``LeftHand`` body gets "<Side> hand fingers" whatever finger
+    the BVH lists first (Studio exports list the thumb first).
+    """
+    if node.name in SECTION_COMMENTS:
+        return SECTION_COMMENTS[node.name]
+    if is_first_child and parent is not None and parent.name.endswith("Hand"):
+        side = parent.name[: -len("Hand")]
+        return "%s hand fingers" % side
+    return None
+
+
+def emit_body(node, depth, hips_height, geoms, childclass, lines,
+              parent=None, is_first_child=False):
     """Recursively append the MJCF lines for a body and its descendants."""
     indent = "  " * depth
     name = node.name
 
-    if name in SECTION_COMMENTS:
-        lines.append("%s<!-- %s -->" % (indent, SECTION_COMMENTS[name]))
+    comment = section_comment(node, parent, is_first_child)
+    if comment is not None:
+        lines.append("%s<!-- %s -->" % (indent, comment))
 
     is_root = depth == 2  # worldbody is at depth 1, the root body at depth 2.
     if is_root:
@@ -339,11 +401,11 @@ def emit_body(node, depth, hips_height, geoms, childclass, lines):
 
     lines.append("%s  %s" % (indent, build_geom_xml(node, geoms)))
 
-    for child in node.children:
-        if child.is_end_site:
-            continue
+    body_children = [c for c in node.children if not c.is_end_site]
+    for i, child in enumerate(body_children):
         lines.append("")
-        emit_body(child, depth + 1, hips_height, geoms, childclass, lines)
+        emit_body(child, depth + 1, hips_height, geoms, childclass, lines,
+                  parent=node, is_first_child=(i == 0))
 
     lines.append("%s</body>" % indent)
 

@@ -27,12 +27,17 @@ MOVIN-Isaac-Plugin/
     bvh_utils.py                 # BVH loader + BVH->Isaac/retarget conversion (plugin-owned)
   scripts/
     generate_skeleton_mjcf.py    # Generate a skeleton MJCF from a T-pose BVH
+  tests/
+    test_skeleton_assets.py      # Checks the V3 MJCF against its T-pose and the SDK preset
   data/
     movinman_skeleton.xml        # MOVINMan MJCF skeleton (51 bones, legacy preset)
     movinman_v3_skeleton.xml     # MOVINManV3 MJCF skeleton (54 joints, generated)
     movinman_mesh.npz            # Pre-extracted mesh for LBS overlay (legacy preset only)
     MOVINMan_dump.xml            # MOVINMan FBX dump
-    MOVINManV3_Tpose.bvh         # MOVINManV3 reference T-pose (used to generate the MJCF)
+    MOVINman_V3_local_rotation_identity.fbx
+                                 # MOVINManV3 rig with identity local rotations in the bind pose (skinned mesh)
+    MOVINman_V3_local_rotation_identity_tpose.bvh
+                                 # Its rest pose as a BVH (source of the V3 MJCF)
     Locomotion.bvh               # Sample BVH for testing
     test_V3.bvh                  # Sample MOVINManV3 BVH for testing
 ```
@@ -165,12 +170,15 @@ Mesh overlay (`--view_mode mesh` / `mesh_skeleton`) is currently only available 
 
 Robot retargeting works with both presets; with `movinman_v3` the G1 torso is automatically mapped to `Spine3` via a V3-specific IK config.
 
-`data/movinman_v3_skeleton.xml` is generated from `data/MOVINManV3_Tpose.bvh` and can be regenerated with:
+`data/movinman_v3_skeleton.xml` is generated from `data/MOVINman_V3_local_rotation_identity_tpose.bvh`, the rest pose of `data/MOVINman_V3_local_rotation_identity.fbx` (a MOVINManV3 rig whose bind pose has identity local rotations on every joint). Each `OFFSET` equals the FBX `Lcl Translation`, i.e. the joint's translation in its parent's frame -- the same `p` MOVIN Studio streams and the same `OFFSET` found in its BVH exports. Because the MJCF bodies sit in those frames, the streamed and BVH local rotations drive the hinges directly and no rest-pose removal is applied: streams from the earlier MOVINManV3 rig carry non-identity rest quaternions on the finger bones (`Thumb1` about 60 degrees) and removing them would straighten the fingers, while the identity-local rig streams identity rest quaternions, where removal is a no-op. The body order follows the BVH and the live stream (fingers Thumb, Index, Middle, Ring, Pinky within each hand); the FBX itself lists fingers alphabetically, which nothing at runtime depends on. Regenerate the MJCF with:
 
 ```bash
-python scripts/generate_skeleton_mjcf.py data/MOVINManV3_Tpose.bvh \
+python scripts/generate_skeleton_mjcf.py \
+    data/MOVINman_V3_local_rotation_identity_tpose.bvh \
     data/movinman_v3_skeleton.xml --model-name movinman_v3
 ```
+
+`python -m unittest discover -s tests` checks that the committed MJCF is exactly this command's output and that its body order and offsets match the SDK preset and the T-pose.
 
 ## Options
 

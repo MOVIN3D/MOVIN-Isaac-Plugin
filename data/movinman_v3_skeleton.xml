@@ -29,9 +29,9 @@
           <joint name="Spine1_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
           <joint name="Spine1_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
           <joint name="Spine1_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-          <geom name="Spine1" type="capsule" fromto="0 0 0 0 0.017544 0.099502" size="0.065" density="1000"/>
+          <geom name="Spine1" type="capsule" fromto="0 0 0 0 0.017544 0.099501" size="0.065" density="1000"/>
 
-          <body name="Spine2" pos="0 0.017544 0.099502">
+          <body name="Spine2" pos="0 0.017544 0.099501">
             <joint name="Spine2_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
             <joint name="Spine2_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
             <joint name="Spine2_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
@@ -76,9 +76,9 @@
                   <joint name="RightArm_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                   <joint name="RightArm_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                   <joint name="RightArm_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                  <geom name="RightArm" type="capsule" fromto="0 0 0 -0.288999 0 0" size=".04" density="1000"/>
+                  <geom name="RightArm" type="capsule" fromto="0 0 0 -0.288998 0 0" size=".04" density="1000"/>
 
-                  <body name="RightForeArm" pos="-0.288999 0 0">
+                  <body name="RightForeArm" pos="-0.288998 0 0">
                     <joint name="RightForeArm_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                     <joint name="RightForeArm_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                     <joint name="RightForeArm_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
@@ -91,65 +91,65 @@
                       <geom name="RightHand" type="sphere" size=".03" density="1000"/>
 
                       <!-- Right hand fingers -->
+                      <body name="RightHandThumb1" pos="-0.041726 -0.027704 -0.020077" childclass="hand">
+                        <joint name="RightHandThumb1_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
+                        <joint name="RightHandThumb1_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
+                        <joint name="RightHandThumb1_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
+                        <geom name="RightHandThumb1" type="capsule" fromto="0 0 0 -0.032269 -0.000022 0" size=".008" density="1000"/>
+
+                        <body name="RightHandThumb2" pos="-0.032269 -0.000022 0">
+                          <joint name="RightHandThumb2_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
+                          <joint name="RightHandThumb2_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
+                          <joint name="RightHandThumb2_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
+                          <geom name="RightHandThumb2" type="capsule" fromto="0 0 0 -0.027413 0.001777 -0.002918" size=".007" density="1000"/>
+
+                          <body name="RightHandThumb3" pos="-0.027413 0.001777 -0.002918">
+                            <joint name="RightHandThumb3_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
+                            <joint name="RightHandThumb3_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
+                            <joint name="RightHandThumb3_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
+                            <geom name="RightHandThumb3" type="sphere" pos="-0.013706 0.000888 -0.001459" size=".008" density="1000"/>
+                          </body>
+                        </body>
+                      </body>
+
                       <body name="RightHandIndex1" pos="-0.106087 -0.021057 -0.008585" childclass="hand">
                         <joint name="RightHandIndex1_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                         <joint name="RightHandIndex1_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                         <joint name="RightHandIndex1_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                        <geom name="RightHandIndex1" type="capsule" fromto="0 0 0 -0.033465 -0.002706 0" size=".007" density="1000"/>
+                        <geom name="RightHandIndex1" type="capsule" fromto="0 0 0 -0.033573 0.000221 0" size=".007" density="1000"/>
 
-                        <body name="RightHandIndex2" pos="-0.033465 -0.002706 0">
+                        <body name="RightHandIndex2" pos="-0.033573 0.000221 0">
                           <joint name="RightHandIndex2_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                           <joint name="RightHandIndex2_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                           <joint name="RightHandIndex2_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                          <geom name="RightHandIndex2" type="capsule" fromto="0 0 0 -0.023522 -0.000874 0.00164" size=".006" density="1000"/>
+                          <geom name="RightHandIndex2" type="capsule" fromto="0 0 0 -0.023509 0.001179 0.00164" size=".006" density="1000"/>
 
-                          <body name="RightHandIndex3" pos="-0.023522 -0.000874 0.00164">
+                          <body name="RightHandIndex3" pos="-0.023509 0.001179 0.00164">
                             <joint name="RightHandIndex3_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                             <joint name="RightHandIndex3_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                             <joint name="RightHandIndex3_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                            <geom name="RightHandIndex3" type="sphere" pos="0 0 0.011798" size=".006" density="1000"/>
+                            <geom name="RightHandIndex3" type="sphere" pos="-0.011754 0.000589 0.00082" size=".006" density="1000"/>
                           </body>
                         </body>
                       </body>
 
-                      <body name="RightHandMiddle1" pos="-0.11422 0.003961 -0.005852" childclass="hand">
+                      <body name="RightHandMiddle1" pos="-0.11422 0.003961 -0.005851" childclass="hand">
                         <joint name="RightHandMiddle1_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                         <joint name="RightHandMiddle1_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                         <joint name="RightHandMiddle1_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                        <geom name="RightHandMiddle1" type="capsule" fromto="0 0 0 -0.031639 0.005777 0" size=".007" density="1000"/>
+                        <geom name="RightHandMiddle1" type="capsule" fromto="0 0 0 -0.032162 0.000195 0" size=".007" density="1000"/>
 
-                        <body name="RightHandMiddle2" pos="-0.031639 0.005777 0">
+                        <body name="RightHandMiddle2" pos="-0.032162 0.000195 0">
                           <joint name="RightHandMiddle2_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                           <joint name="RightHandMiddle2_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                           <joint name="RightHandMiddle2_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                          <geom name="RightHandMiddle2" type="capsule" fromto="0 0 0 -0.024691 0.003143 0.000421" size=".006" density="1000"/>
+                          <geom name="RightHandMiddle2" type="capsule" fromto="0 0 0 -0.024862 -0.001192 0.000421" size=".006" density="1000"/>
 
-                          <body name="RightHandMiddle3" pos="-0.024691 0.003143 0.000421">
+                          <body name="RightHandMiddle3" pos="-0.024862 -0.001192 0.000421">
                             <joint name="RightHandMiddle3_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                             <joint name="RightHandMiddle3_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                             <joint name="RightHandMiddle3_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                            <geom name="RightHandMiddle3" type="sphere" pos="0 0 0.012447" size=".006" density="1000"/>
-                          </body>
-                        </body>
-                      </body>
-
-                      <body name="RightHandPinky1" pos="-0.088138 0.046496 -0.014748" childclass="hand">
-                        <joint name="RightHandPinky1_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
-                        <joint name="RightHandPinky1_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
-                        <joint name="RightHandPinky1_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                        <geom name="RightHandPinky1" type="capsule" fromto="0 0 0 -0.017064 0.012068 0" size=".006" density="1000"/>
-
-                        <body name="RightHandPinky2" pos="-0.017064 0.012068 0">
-                          <joint name="RightHandPinky2_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
-                          <joint name="RightHandPinky2_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
-                          <joint name="RightHandPinky2_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                          <geom name="RightHandPinky2" type="capsule" fromto="0 0 0 -0.016403 0.011616 -0.001738" size=".005" density="1000"/>
-
-                          <body name="RightHandPinky3" pos="-0.016403 0.011616 -0.001738">
-                            <joint name="RightHandPinky3_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
-                            <joint name="RightHandPinky3_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
-                            <joint name="RightHandPinky3_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                            <geom name="RightHandPinky3" type="sphere" pos="0 0 0.010087" size=".005" density="1000"/>
+                            <geom name="RightHandMiddle3" type="sphere" pos="-0.012431 -0.000596 0.00021" size=".006" density="1000"/>
                           </body>
                         </body>
                       </body>
@@ -158,40 +158,40 @@
                         <joint name="RightHandRing1_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                         <joint name="RightHandRing1_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                         <joint name="RightHandRing1_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                        <geom name="RightHandRing1" type="capsule" fromto="0 0 0 -0.028958 0.007922 0" size=".007" density="1000"/>
+                        <geom name="RightHandRing1" type="capsule" fromto="0 0 0 -0.030022 0.000157 0" size=".007" density="1000"/>
 
-                        <body name="RightHandRing2" pos="-0.028958 0.007922 0">
+                        <body name="RightHandRing2" pos="-0.030022 0.000157 0">
                           <joint name="RightHandRing2_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                           <joint name="RightHandRing2_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                           <joint name="RightHandRing2_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                          <geom name="RightHandRing2" type="capsule" fromto="0 0 0 -0.024745 0.003747 0.000639" size=".006" density="1000"/>
+                          <geom name="RightHandRing2" type="capsule" fromto="0 0 0 -0.024872 -0.002786 0.000639" size=".006" density="1000"/>
 
-                          <body name="RightHandRing3" pos="-0.024745 0.003747 0.000639">
+                          <body name="RightHandRing3" pos="-0.024872 -0.002786 0.000639">
                             <joint name="RightHandRing3_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                             <joint name="RightHandRing3_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                             <joint name="RightHandRing3_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                            <geom name="RightHandRing3" type="sphere" pos="0 0 0.012518" size=".006" density="1000"/>
+                            <geom name="RightHandRing3" type="sphere" pos="-0.012436 -0.001393 0.000319" size=".006" density="1000"/>
                           </body>
                         </body>
                       </body>
 
-                      <body name="RightHandThumb1" pos="-0.041726 -0.027704 -0.020077" childclass="hand">
-                        <joint name="RightHandThumb1_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
-                        <joint name="RightHandThumb1_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
-                        <joint name="RightHandThumb1_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                        <geom name="RightHandThumb1" type="capsule" fromto="0 0 0 -0.01592 -0.028068 0" size=".008" density="1000"/>
+                      <body name="RightHandPinky1" pos="-0.088138 0.046496 -0.014748" childclass="hand">
+                        <joint name="RightHandPinky1_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
+                        <joint name="RightHandPinky1_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
+                        <joint name="RightHandPinky1_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
+                        <geom name="RightHandPinky1" type="capsule" fromto="0 0 0 -0.0209 0.000098 0" size=".006" density="1000"/>
 
-                        <body name="RightHandThumb2" pos="-0.01592 -0.028068 0">
-                          <joint name="RightHandThumb2_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
-                          <joint name="RightHandThumb2_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
-                          <joint name="RightHandThumb2_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                          <geom name="RightHandThumb2" type="capsule" fromto="0 0 0 -0.022142 -0.016259 -0.002917" size=".007" density="1000"/>
+                        <body name="RightHandPinky2" pos="-0.0209 0.000098 0">
+                          <joint name="RightHandPinky2_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
+                          <joint name="RightHandPinky2_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
+                          <joint name="RightHandPinky2_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
+                          <geom name="RightHandPinky2" type="capsule" fromto="0 0 0 -0.020099 0.000107 -0.001737" size=".005" density="1000"/>
 
-                          <body name="RightHandThumb3" pos="-0.022142 -0.016259 -0.002917">
-                            <joint name="RightHandThumb3_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
-                            <joint name="RightHandThumb3_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
-                            <joint name="RightHandThumb3_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                            <geom name="RightHandThumb3" type="sphere" pos="0 0 0.013813" size=".008" density="1000"/>
+                          <body name="RightHandPinky3" pos="-0.020099 0.000107 -0.001737">
+                            <joint name="RightHandPinky3_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
+                            <joint name="RightHandPinky3_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
+                            <joint name="RightHandPinky3_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
+                            <geom name="RightHandPinky3" type="sphere" pos="-0.01005 0.000054 -0.000869" size=".005" density="1000"/>
                           </body>
                         </body>
                       </body>
@@ -226,65 +226,65 @@
                       <geom name="LeftHand" type="sphere" size=".03" density="1000"/>
 
                       <!-- Left hand fingers -->
+                      <body name="LeftHandThumb1" pos="0.041726 -0.027704 -0.020077" childclass="hand">
+                        <joint name="LeftHandThumb1_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
+                        <joint name="LeftHandThumb1_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
+                        <joint name="LeftHandThumb1_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
+                        <geom name="LeftHandThumb1" type="capsule" fromto="0 0 0 0.032269 -0.000022 0" size=".008" density="1000"/>
+
+                        <body name="LeftHandThumb2" pos="0.032269 -0.000022 0">
+                          <joint name="LeftHandThumb2_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
+                          <joint name="LeftHandThumb2_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
+                          <joint name="LeftHandThumb2_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
+                          <geom name="LeftHandThumb2" type="capsule" fromto="0 0 0 0.027416 0.00173 -0.002918" size=".007" density="1000"/>
+
+                          <body name="LeftHandThumb3" pos="0.027416 0.00173 -0.002918">
+                            <joint name="LeftHandThumb3_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
+                            <joint name="LeftHandThumb3_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
+                            <joint name="LeftHandThumb3_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
+                            <geom name="LeftHandThumb3" type="sphere" pos="0.013708 0.000865 -0.001459" size=".008" density="1000"/>
+                          </body>
+                        </body>
+                      </body>
+
                       <body name="LeftHandIndex1" pos="0.106087 -0.021057 -0.008585" childclass="hand">
                         <joint name="LeftHandIndex1_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                         <joint name="LeftHandIndex1_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                         <joint name="LeftHandIndex1_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                        <geom name="LeftHandIndex1" type="capsule" fromto="0 0 0 0.033465 -0.002706 0" size=".007" density="1000"/>
+                        <geom name="LeftHandIndex1" type="capsule" fromto="0 0 0 0.033573 0.000221 0" size=".007" density="1000"/>
 
-                        <body name="LeftHandIndex2" pos="0.033465 -0.002706 0">
+                        <body name="LeftHandIndex2" pos="0.033573 0.000221 0">
                           <joint name="LeftHandIndex2_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                           <joint name="LeftHandIndex2_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                           <joint name="LeftHandIndex2_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                          <geom name="LeftHandIndex2" type="capsule" fromto="0 0 0 0.023522 -0.000874 0.00164" size=".006" density="1000"/>
+                          <geom name="LeftHandIndex2" type="capsule" fromto="0 0 0 0.023509 0.001179 0.00164" size=".006" density="1000"/>
 
-                          <body name="LeftHandIndex3" pos="0.023522 -0.000874 0.00164">
+                          <body name="LeftHandIndex3" pos="0.023509 0.001179 0.00164">
                             <joint name="LeftHandIndex3_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                             <joint name="LeftHandIndex3_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                             <joint name="LeftHandIndex3_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                            <geom name="LeftHandIndex3" type="sphere" pos="0 0 0.011798" size=".006" density="1000"/>
+                            <geom name="LeftHandIndex3" type="sphere" pos="0.011754 0.000589 0.00082" size=".006" density="1000"/>
                           </body>
                         </body>
                       </body>
 
-                      <body name="LeftHandMiddle1" pos="0.11422 0.003961 -0.005852" childclass="hand">
+                      <body name="LeftHandMiddle1" pos="0.11422 0.003961 -0.005851" childclass="hand">
                         <joint name="LeftHandMiddle1_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                         <joint name="LeftHandMiddle1_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                         <joint name="LeftHandMiddle1_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                        <geom name="LeftHandMiddle1" type="capsule" fromto="0 0 0 0.031639 0.005777 0" size=".007" density="1000"/>
+                        <geom name="LeftHandMiddle1" type="capsule" fromto="0 0 0 0.032162 0.000195 0.000001" size=".007" density="1000"/>
 
-                        <body name="LeftHandMiddle2" pos="0.031639 0.005777 0">
+                        <body name="LeftHandMiddle2" pos="0.032162 0.000195 0.000001">
                           <joint name="LeftHandMiddle2_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                           <joint name="LeftHandMiddle2_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                           <joint name="LeftHandMiddle2_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                          <geom name="LeftHandMiddle2" type="capsule" fromto="0 0 0 0.024691 0.003143 0.000421" size=".006" density="1000"/>
+                          <geom name="LeftHandMiddle2" type="capsule" fromto="0 0 0 0.024862 -0.001192 0.000421" size=".006" density="1000"/>
 
-                          <body name="LeftHandMiddle3" pos="0.024691 0.003143 0.000421">
+                          <body name="LeftHandMiddle3" pos="0.024862 -0.001192 0.000421">
                             <joint name="LeftHandMiddle3_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                             <joint name="LeftHandMiddle3_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                             <joint name="LeftHandMiddle3_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                            <geom name="LeftHandMiddle3" type="sphere" pos="0 0 0.012447" size=".006" density="1000"/>
-                          </body>
-                        </body>
-                      </body>
-
-                      <body name="LeftHandPinky1" pos="0.088138 0.046496 -0.014748" childclass="hand">
-                        <joint name="LeftHandPinky1_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
-                        <joint name="LeftHandPinky1_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
-                        <joint name="LeftHandPinky1_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                        <geom name="LeftHandPinky1" type="capsule" fromto="0 0 0 0.017064 0.012068 0" size=".006" density="1000"/>
-
-                        <body name="LeftHandPinky2" pos="0.017064 0.012068 0">
-                          <joint name="LeftHandPinky2_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
-                          <joint name="LeftHandPinky2_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
-                          <joint name="LeftHandPinky2_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                          <geom name="LeftHandPinky2" type="capsule" fromto="0 0 0 0.016403 0.011616 -0.001738" size=".005" density="1000"/>
-
-                          <body name="LeftHandPinky3" pos="0.016403 0.011616 -0.001738">
-                            <joint name="LeftHandPinky3_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
-                            <joint name="LeftHandPinky3_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
-                            <joint name="LeftHandPinky3_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                            <geom name="LeftHandPinky3" type="sphere" pos="0 0 0.010087" size=".005" density="1000"/>
+                            <geom name="LeftHandMiddle3" type="sphere" pos="0.012431 -0.000596 0.00021" size=".006" density="1000"/>
                           </body>
                         </body>
                       </body>
@@ -293,40 +293,40 @@
                         <joint name="LeftHandRing1_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                         <joint name="LeftHandRing1_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                         <joint name="LeftHandRing1_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                        <geom name="LeftHandRing1" type="capsule" fromto="0 0 0 0.028958 0.007922 0" size=".007" density="1000"/>
+                        <geom name="LeftHandRing1" type="capsule" fromto="0 0 0 0.030022 0.000157 0" size=".007" density="1000"/>
 
-                        <body name="LeftHandRing2" pos="0.028958 0.007922 0">
+                        <body name="LeftHandRing2" pos="0.030022 0.000157 0">
                           <joint name="LeftHandRing2_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                           <joint name="LeftHandRing2_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                           <joint name="LeftHandRing2_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                          <geom name="LeftHandRing2" type="capsule" fromto="0 0 0 0.024745 0.003747 0.000639" size=".006" density="1000"/>
+                          <geom name="LeftHandRing2" type="capsule" fromto="0 0 0 0.024872 -0.002786 0.000639" size=".006" density="1000"/>
 
-                          <body name="LeftHandRing3" pos="0.024745 0.003747 0.000639">
+                          <body name="LeftHandRing3" pos="0.024872 -0.002786 0.000639">
                             <joint name="LeftHandRing3_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
                             <joint name="LeftHandRing3_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
                             <joint name="LeftHandRing3_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                            <geom name="LeftHandRing3" type="sphere" pos="0 0 0.012518" size=".006" density="1000"/>
+                            <geom name="LeftHandRing3" type="sphere" pos="0.012436 -0.001393 0.000319" size=".006" density="1000"/>
                           </body>
                         </body>
                       </body>
 
-                      <body name="LeftHandThumb1" pos="0.041726 -0.027704 -0.020077" childclass="hand">
-                        <joint name="LeftHandThumb1_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
-                        <joint name="LeftHandThumb1_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
-                        <joint name="LeftHandThumb1_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                        <geom name="LeftHandThumb1" type="capsule" fromto="0 0 0 0.01592 -0.028068 0" size=".008" density="1000"/>
+                      <body name="LeftHandPinky1" pos="0.088138 0.046496 -0.014748" childclass="hand">
+                        <joint name="LeftHandPinky1_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
+                        <joint name="LeftHandPinky1_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
+                        <joint name="LeftHandPinky1_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
+                        <geom name="LeftHandPinky1" type="capsule" fromto="0 0 0 0.0209 0.000098 0" size=".006" density="1000"/>
 
-                        <body name="LeftHandThumb2" pos="0.01592 -0.028068 0">
-                          <joint name="LeftHandThumb2_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
-                          <joint name="LeftHandThumb2_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
-                          <joint name="LeftHandThumb2_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                          <geom name="LeftHandThumb2" type="capsule" fromto="0 0 0 0.022143 -0.016259 -0.002918" size=".007" density="1000"/>
+                        <body name="LeftHandPinky2" pos="0.0209 0.000098 0">
+                          <joint name="LeftHandPinky2_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
+                          <joint name="LeftHandPinky2_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
+                          <joint name="LeftHandPinky2_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
+                          <geom name="LeftHandPinky2" type="capsule" fromto="0 0 0 0.020099 0.000107 -0.001738" size=".005" density="1000"/>
 
-                          <body name="LeftHandThumb3" pos="0.022143 -0.016259 -0.002918">
-                            <joint name="LeftHandThumb3_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
-                            <joint name="LeftHandThumb3_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
-                            <joint name="LeftHandThumb3_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
-                            <geom name="LeftHandThumb3" type="sphere" pos="0 0 0.013813" size=".008" density="1000"/>
+                          <body name="LeftHandPinky3" pos="0.020099 0.000107 -0.001738">
+                            <joint name="LeftHandPinky3_x" type="hinge" axis="1 0 0" range="-3.14159 3.14159"/>
+                            <joint name="LeftHandPinky3_y" type="hinge" axis="0 1 0" range="-3.14159 3.14159"/>
+                            <joint name="LeftHandPinky3_z" type="hinge" axis="0 0 1" range="-3.14159 3.14159"/>
+                            <geom name="LeftHandPinky3" type="sphere" pos="0.010049 0.000053 -0.000869" size=".005" density="1000"/>
                           </body>
                         </body>
                       </body>
@@ -433,6 +433,15 @@
     <motor name="RightHand_x" gear="50" joint="RightHand_x"/>
     <motor name="RightHand_y" gear="50" joint="RightHand_y"/>
     <motor name="RightHand_z" gear="50" joint="RightHand_z"/>
+    <motor name="RightHandThumb1_x" gear="10" joint="RightHandThumb1_x"/>
+    <motor name="RightHandThumb1_y" gear="10" joint="RightHandThumb1_y"/>
+    <motor name="RightHandThumb1_z" gear="10" joint="RightHandThumb1_z"/>
+    <motor name="RightHandThumb2_x" gear="10" joint="RightHandThumb2_x"/>
+    <motor name="RightHandThumb2_y" gear="10" joint="RightHandThumb2_y"/>
+    <motor name="RightHandThumb2_z" gear="10" joint="RightHandThumb2_z"/>
+    <motor name="RightHandThumb3_x" gear="10" joint="RightHandThumb3_x"/>
+    <motor name="RightHandThumb3_y" gear="10" joint="RightHandThumb3_y"/>
+    <motor name="RightHandThumb3_z" gear="10" joint="RightHandThumb3_z"/>
     <motor name="RightHandIndex1_x" gear="10" joint="RightHandIndex1_x"/>
     <motor name="RightHandIndex1_y" gear="10" joint="RightHandIndex1_y"/>
     <motor name="RightHandIndex1_z" gear="10" joint="RightHandIndex1_z"/>
@@ -451,15 +460,6 @@
     <motor name="RightHandMiddle3_x" gear="10" joint="RightHandMiddle3_x"/>
     <motor name="RightHandMiddle3_y" gear="10" joint="RightHandMiddle3_y"/>
     <motor name="RightHandMiddle3_z" gear="10" joint="RightHandMiddle3_z"/>
-    <motor name="RightHandPinky1_x" gear="10" joint="RightHandPinky1_x"/>
-    <motor name="RightHandPinky1_y" gear="10" joint="RightHandPinky1_y"/>
-    <motor name="RightHandPinky1_z" gear="10" joint="RightHandPinky1_z"/>
-    <motor name="RightHandPinky2_x" gear="10" joint="RightHandPinky2_x"/>
-    <motor name="RightHandPinky2_y" gear="10" joint="RightHandPinky2_y"/>
-    <motor name="RightHandPinky2_z" gear="10" joint="RightHandPinky2_z"/>
-    <motor name="RightHandPinky3_x" gear="10" joint="RightHandPinky3_x"/>
-    <motor name="RightHandPinky3_y" gear="10" joint="RightHandPinky3_y"/>
-    <motor name="RightHandPinky3_z" gear="10" joint="RightHandPinky3_z"/>
     <motor name="RightHandRing1_x" gear="10" joint="RightHandRing1_x"/>
     <motor name="RightHandRing1_y" gear="10" joint="RightHandRing1_y"/>
     <motor name="RightHandRing1_z" gear="10" joint="RightHandRing1_z"/>
@@ -469,15 +469,15 @@
     <motor name="RightHandRing3_x" gear="10" joint="RightHandRing3_x"/>
     <motor name="RightHandRing3_y" gear="10" joint="RightHandRing3_y"/>
     <motor name="RightHandRing3_z" gear="10" joint="RightHandRing3_z"/>
-    <motor name="RightHandThumb1_x" gear="10" joint="RightHandThumb1_x"/>
-    <motor name="RightHandThumb1_y" gear="10" joint="RightHandThumb1_y"/>
-    <motor name="RightHandThumb1_z" gear="10" joint="RightHandThumb1_z"/>
-    <motor name="RightHandThumb2_x" gear="10" joint="RightHandThumb2_x"/>
-    <motor name="RightHandThumb2_y" gear="10" joint="RightHandThumb2_y"/>
-    <motor name="RightHandThumb2_z" gear="10" joint="RightHandThumb2_z"/>
-    <motor name="RightHandThumb3_x" gear="10" joint="RightHandThumb3_x"/>
-    <motor name="RightHandThumb3_y" gear="10" joint="RightHandThumb3_y"/>
-    <motor name="RightHandThumb3_z" gear="10" joint="RightHandThumb3_z"/>
+    <motor name="RightHandPinky1_x" gear="10" joint="RightHandPinky1_x"/>
+    <motor name="RightHandPinky1_y" gear="10" joint="RightHandPinky1_y"/>
+    <motor name="RightHandPinky1_z" gear="10" joint="RightHandPinky1_z"/>
+    <motor name="RightHandPinky2_x" gear="10" joint="RightHandPinky2_x"/>
+    <motor name="RightHandPinky2_y" gear="10" joint="RightHandPinky2_y"/>
+    <motor name="RightHandPinky2_z" gear="10" joint="RightHandPinky2_z"/>
+    <motor name="RightHandPinky3_x" gear="10" joint="RightHandPinky3_x"/>
+    <motor name="RightHandPinky3_y" gear="10" joint="RightHandPinky3_y"/>
+    <motor name="RightHandPinky3_z" gear="10" joint="RightHandPinky3_z"/>
     <motor name="LeftShoulder_x" gear="100" joint="LeftShoulder_x"/>
     <motor name="LeftShoulder_y" gear="100" joint="LeftShoulder_y"/>
     <motor name="LeftShoulder_z" gear="100" joint="LeftShoulder_z"/>
@@ -490,6 +490,15 @@
     <motor name="LeftHand_x" gear="50" joint="LeftHand_x"/>
     <motor name="LeftHand_y" gear="50" joint="LeftHand_y"/>
     <motor name="LeftHand_z" gear="50" joint="LeftHand_z"/>
+    <motor name="LeftHandThumb1_x" gear="10" joint="LeftHandThumb1_x"/>
+    <motor name="LeftHandThumb1_y" gear="10" joint="LeftHandThumb1_y"/>
+    <motor name="LeftHandThumb1_z" gear="10" joint="LeftHandThumb1_z"/>
+    <motor name="LeftHandThumb2_x" gear="10" joint="LeftHandThumb2_x"/>
+    <motor name="LeftHandThumb2_y" gear="10" joint="LeftHandThumb2_y"/>
+    <motor name="LeftHandThumb2_z" gear="10" joint="LeftHandThumb2_z"/>
+    <motor name="LeftHandThumb3_x" gear="10" joint="LeftHandThumb3_x"/>
+    <motor name="LeftHandThumb3_y" gear="10" joint="LeftHandThumb3_y"/>
+    <motor name="LeftHandThumb3_z" gear="10" joint="LeftHandThumb3_z"/>
     <motor name="LeftHandIndex1_x" gear="10" joint="LeftHandIndex1_x"/>
     <motor name="LeftHandIndex1_y" gear="10" joint="LeftHandIndex1_y"/>
     <motor name="LeftHandIndex1_z" gear="10" joint="LeftHandIndex1_z"/>
@@ -508,15 +517,6 @@
     <motor name="LeftHandMiddle3_x" gear="10" joint="LeftHandMiddle3_x"/>
     <motor name="LeftHandMiddle3_y" gear="10" joint="LeftHandMiddle3_y"/>
     <motor name="LeftHandMiddle3_z" gear="10" joint="LeftHandMiddle3_z"/>
-    <motor name="LeftHandPinky1_x" gear="10" joint="LeftHandPinky1_x"/>
-    <motor name="LeftHandPinky1_y" gear="10" joint="LeftHandPinky1_y"/>
-    <motor name="LeftHandPinky1_z" gear="10" joint="LeftHandPinky1_z"/>
-    <motor name="LeftHandPinky2_x" gear="10" joint="LeftHandPinky2_x"/>
-    <motor name="LeftHandPinky2_y" gear="10" joint="LeftHandPinky2_y"/>
-    <motor name="LeftHandPinky2_z" gear="10" joint="LeftHandPinky2_z"/>
-    <motor name="LeftHandPinky3_x" gear="10" joint="LeftHandPinky3_x"/>
-    <motor name="LeftHandPinky3_y" gear="10" joint="LeftHandPinky3_y"/>
-    <motor name="LeftHandPinky3_z" gear="10" joint="LeftHandPinky3_z"/>
     <motor name="LeftHandRing1_x" gear="10" joint="LeftHandRing1_x"/>
     <motor name="LeftHandRing1_y" gear="10" joint="LeftHandRing1_y"/>
     <motor name="LeftHandRing1_z" gear="10" joint="LeftHandRing1_z"/>
@@ -526,15 +526,15 @@
     <motor name="LeftHandRing3_x" gear="10" joint="LeftHandRing3_x"/>
     <motor name="LeftHandRing3_y" gear="10" joint="LeftHandRing3_y"/>
     <motor name="LeftHandRing3_z" gear="10" joint="LeftHandRing3_z"/>
-    <motor name="LeftHandThumb1_x" gear="10" joint="LeftHandThumb1_x"/>
-    <motor name="LeftHandThumb1_y" gear="10" joint="LeftHandThumb1_y"/>
-    <motor name="LeftHandThumb1_z" gear="10" joint="LeftHandThumb1_z"/>
-    <motor name="LeftHandThumb2_x" gear="10" joint="LeftHandThumb2_x"/>
-    <motor name="LeftHandThumb2_y" gear="10" joint="LeftHandThumb2_y"/>
-    <motor name="LeftHandThumb2_z" gear="10" joint="LeftHandThumb2_z"/>
-    <motor name="LeftHandThumb3_x" gear="10" joint="LeftHandThumb3_x"/>
-    <motor name="LeftHandThumb3_y" gear="10" joint="LeftHandThumb3_y"/>
-    <motor name="LeftHandThumb3_z" gear="10" joint="LeftHandThumb3_z"/>
+    <motor name="LeftHandPinky1_x" gear="10" joint="LeftHandPinky1_x"/>
+    <motor name="LeftHandPinky1_y" gear="10" joint="LeftHandPinky1_y"/>
+    <motor name="LeftHandPinky1_z" gear="10" joint="LeftHandPinky1_z"/>
+    <motor name="LeftHandPinky2_x" gear="10" joint="LeftHandPinky2_x"/>
+    <motor name="LeftHandPinky2_y" gear="10" joint="LeftHandPinky2_y"/>
+    <motor name="LeftHandPinky2_z" gear="10" joint="LeftHandPinky2_z"/>
+    <motor name="LeftHandPinky3_x" gear="10" joint="LeftHandPinky3_x"/>
+    <motor name="LeftHandPinky3_y" gear="10" joint="LeftHandPinky3_y"/>
+    <motor name="LeftHandPinky3_z" gear="10" joint="LeftHandPinky3_z"/>
     <motor name="RightUpLeg_x" gear="200" joint="RightUpLeg_x"/>
     <motor name="RightUpLeg_y" gear="200" joint="RightUpLeg_y"/>
     <motor name="RightUpLeg_z" gear="200" joint="RightUpLeg_z"/>
