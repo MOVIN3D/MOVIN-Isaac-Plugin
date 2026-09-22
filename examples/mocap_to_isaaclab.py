@@ -75,8 +75,8 @@ parser.add_argument("--human_height", type=float, default=1.75,
 parser.add_argument("--robot_view", type=str, default="side_by_side",
                     choices=["side_by_side", "robot_only", "overlay"],
                     help="Robot display mode: side_by_side, robot_only, or overlay")
-parser.add_argument("--robot_offset", type=float, default=2.0,
-                    help="X offset for side_by_side robot view (default: 2.0 m)")
+parser.add_argument("--robot_offset", type=float, default=1.0,
+                    help="X offset for side_by_side robot view (default: 1.0 m)")
 parser.add_argument("--debug", action="store_true",
                     help="Print FPS and debug info")
 parser.add_argument("--print_joints", action="store_true",
