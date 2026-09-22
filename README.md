@@ -43,6 +43,7 @@ MOVIN-Isaac-Plugin/
                                  # Its rest pose as a BVH (source of the V3 MJCF)
     Locomotion.bvh               # Sample BVH for testing
     test_V3.bvh                  # Sample MOVINManV3 BVH for testing
+    ground/                      # Vendored Isaac grid ground plane (avoids the cloud asset fetch)
 ```
 
 ## Live Mocap from MOVIN Studio

@@ -303,6 +303,13 @@ class CameraTracker:
 # Scene setup helpers
 # ---------------------------------------------------------------------------
 
+# Vendored copy of the Isaac grid environment. Spawning the ground plane from the
+# cloud asset root (ISAAC_NUCLEUS_DIR) fails with a FileNotFoundError whenever the
+# S3 fetch does not complete, which takes the whole scene down before anything is
+# built. The asset is small, so ship it with the plugin and stay offline-safe.
+LOCAL_GROUND_USD = os.path.join(PROJECT_ROOT, "data", "ground", "default_environment.usd")
+
+
 def build_ground():
     """Create a ground plane."""
     from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
@@ -315,6 +322,11 @@ def build_ground():
         color=(0.017, 0.0153, 0.01275),
         size=(100.0, 100.0),
     )
+    if os.path.exists(LOCAL_GROUND_USD):
+        ground_cfg.usd_path = LOCAL_GROUND_USD
+    else:
+        print(f"[WARN] Vendored ground asset not found at {LOCAL_GROUND_USD}; "
+              f"falling back to the cloud asset root: {ground_cfg.usd_path}")
     spawn_ground_plane(prim_path="/World/ground", cfg=ground_cfg)
 
 
