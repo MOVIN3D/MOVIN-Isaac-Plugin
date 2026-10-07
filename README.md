@@ -5,17 +5,65 @@ Receives real-time mocap data from **MOVIN Studio** and drives a humanoid skelet
 
 ## Setup
 
+### Requirements
+
+Tested with:
+
+| Component | Version |
+|-----------|---------|
+| OS | Ubuntu 24.04 (x86_64) |
+| Python | 3.11 (required by Isaac Sim 5.x) |
+| Isaac Sim | 5.1.0 |
+| Isaac Lab | 2.3.2.post1 |
+| PyTorch | 2.7.0 (CUDA 12.8) |
+| NVIDIA driver | 580.x (Production Branch) |
+
+Use a Production Branch NVIDIA driver (580.x on Linux). The 595.x New Feature Branch
+drivers crash Isaac Sim 5.1's RTX renderer at startup (segfault in
+`librtx.scenedb.plugin.so`); this takes down the GUI and `--enable_cameras`, while plain
+`--headless` still runs. On Ubuntu:
+
+```bash
+sudo apt install nvidia-driver-580-open
+sudo reboot
+nvidia-smi   # should report Driver Version: 580.x
+```
+
+### Install
+
 ```bash
 git clone --recurse-submodules <repo-url>
 cd MOVIN-Isaac-Plugin
-pip install -e .
+
+# Python 3.11 virtual environment (uv shown; conda or python3.11 -m venv work too)
+uv venv --python 3.11 --seed .venv
+source .venv/bin/activate
+
+# PyTorch, then Isaac Lab + Isaac Sim, then the plugin
+uv pip install torch==2.7.0 torchvision==0.22.0 --index-url https://download.pytorch.org/whl/cu128
+uv pip install "isaaclab[isaacsim]==2.3.2.post1" -e . \
+    --extra-index-url https://pypi.nvidia.com \
+    --extra-index-url https://download.pytorch.org/whl/cu128 \
+    --index-strategy unsafe-best-match
 ```
+
+With plain pip, drop `uv` from the `pip install` lines and `--index-strategy unsafe-best-match`.
 
 If you already cloned without `--recurse-submodules`:
 
 ```bash
 git submodule update --init --recursive
 ```
+
+Isaac Sim asks you to accept the NVIDIA Omniverse EULA on first launch. To accept it
+non-interactively (required for headless and scripted runs):
+
+```bash
+export OMNI_KIT_ACCEPT_EULA=YES
+```
+
+The first launch takes several minutes while Isaac Sim builds its caches; later launches
+take about 10 seconds.
 
 ## Project Structure
 
@@ -28,9 +76,13 @@ MOVIN-Isaac-Plugin/
   scripts/
     generate_skeleton_mjcf.py    # Generate a skeleton MJCF from a T-pose BVH
     extract_movinman_mesh.py     # Extract mesh + skin weights from a MOVIN FBX into an NPZ (runs in Blender)
+    fake_movin_studio.py         # Stream a BVH as MOVIN Studio OSC output (testing without a mocap rig)
+    run_e2e.sh                   # End-to-end test of every mode in Isaac Lab (headless or --gui)
+    capture_viewport.py          # Viewport screenshots for run_e2e.sh --gui
   tests/
     test_skeleton_assets.py      # Checks the V3 MJCF against its T-pose and the SDK preset
     test_mesh_assets.py          # Checks the V3 mesh NPZ against the SDK LBS path and the T-pose
+    test_fake_studio_stream.py   # Checks the fake MOVIN Studio stream against the BVH path
   data/
     movinman_skeleton.xml        # MOVINMan MJCF skeleton (51 bones, legacy preset)
     movinman_v3_skeleton.xml     # MOVINManV3 MJCF skeleton (54 joints, generated)
@@ -65,6 +117,9 @@ python examples/mocap_to_isaaclab.py --mode live --port 11235 \
 # Headless (no GUI)
 python examples/mocap_to_isaaclab.py --mode live --port 11235 --headless
 ```
+
+No MOVIN Studio at hand? Stream a BVH file in its place with
+`scripts/fake_movin_studio.py` (see [Testing without MOVIN Studio](#testing-without-movin-studio)).
 
 ## Recording & Replay
 
@@ -208,11 +263,12 @@ python scripts/generate_skeleton_mjcf.py \
 | `--robot` | `unitree_g1`, `unitree_g1_with_hands` | Enable robot retargeting |
 | `--human_height` | float (default: 1.75) | Human height for retargeting scaling |
 | `--robot_view` | `side_by_side`, `robot_only`, `overlay` | Robot display mode |
-| `--robot_offset` | float (default: 2.0) | X offset for side-by-side view |
+| `--robot_offset` | float (default: 1.0) | X offset for side-by-side view |
 | `--mesh_npz` | `<path>` | Mesh NPZ for the overlay (default: the preset's asset in `data/`) |
 | `--headless` | | No GUI window |
 | `--debug` | | Print FPS and debug info |
 | `--max_frames` | int | Exit the main loop after N frames (mainly for headless testing) |
+| `--print_joints` | | Print the Isaac Lab and skeleton joint order, then exit |
 
 ## Viewer Controls
 
@@ -222,6 +278,48 @@ python scripts/generate_skeleton_mjcf.py \
 - `Space` -- single-step (while paused)
 - `M` -- toggle mesh visibility (`mesh_skeleton` mode)
 - `K` -- toggle skeleton visibility (`mesh_skeleton` mode)
+
+## Testing
+
+Unit tests (no Isaac Sim needed; about 5 seconds):
+
+```bash
+python -m unittest discover -s tests
+```
+
+### Testing without MOVIN Studio
+
+`scripts/fake_movin_studio.py` streams a BVH file as MOVIN Studio's OSC output
+(`/MOVIN/Frame` packets over UDP), so live mode and `--record` work without a mocap rig.
+It loops the clip at its own frame rate until stopped:
+
+```bash
+# Terminal 1: the fake stream (MOVINManV3 clip; use data/Locomotion.bvh for MOVINMan)
+python scripts/fake_movin_studio.py data/test_V3.bvh --port 11235
+
+# Terminal 2: the plugin in live mode
+python examples/mocap_to_isaaclab.py --mode live --port 11235 --view_mode mesh_skeleton
+```
+
+`tests/test_fake_studio_stream.py` checks that frames received through the SDK's
+`MocapReceiver` match the BVH conversion of the same frames (root pose, joint DOFs and
+retargeter input).
+
+### End-to-end
+
+`scripts/run_e2e.sh` runs the full pipeline in Isaac Lab: BVH playback with both presets,
+every view mode and both robots, live mode fed by the fake stream with `--record`, and
+replay of those recordings. Each scenario must reach `--max_frames`, exit cleanly and log no
+traceback, crash or retarget error.
+
+```bash
+scripts/run_e2e.sh            # headless (about 2 minutes)
+scripts/run_e2e.sh --gui      # windowed, saves a viewport screenshot per scenario
+scripts/run_e2e.sh live       # only scenarios whose name matches the regex
+```
+
+Logs, recordings and screenshots go to `build/e2e/<headless|gui>/`; `summary.txt` there lists
+the result of each scenario.
 
 ## Dependencies
 
