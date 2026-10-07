@@ -472,6 +472,19 @@ def create_robot_articulation(usd_path, robot_root_name="pelvis", start_pos=(2.0
     return Articulation(art_cfg)
 
 
+def close_app(sim):
+    """Tear down the SimulationContext, then close the app.
+
+    SimulationApp.close() stops the timeline, and a standalone SimulationContext
+    answers a timeline STOP by rendering until playback resumes -- which never
+    happens, so close() would hang forever. Clearing the instance first removes
+    that callback (the same teardown Isaac Lab's envs do in close()).
+    """
+    sim.clear_all_callbacks()
+    sim.clear_instance()
+    simulation_app.close()
+
+
 def detect_bvh_scale(bvh_data):
     """Auto-detect whether BVH positions are in centimeters or meters."""
     root_y_values = bvh_data.pos[:, 0, 1]  # root Y position (height in Y-up)
@@ -718,7 +731,7 @@ def main():
                 print(f"  [{i*3:3d}-{i*3+2:3d}] {bone}_x/y/z")
             if receiver is not None:
                 receiver.stop()
-            simulation_app.close()
+            close_app(sim)
             return
 
         reorder_map = build_dof_reorder_map(isaac_joint_names, preset.joint_bones)
@@ -1105,7 +1118,7 @@ def main():
         if hasattr(receiver, 'recorder') and receiver.recorder is not None:
             receiver.recorder.save()
         receiver.stop()
-    simulation_app.close()
+    close_app(sim)
 
 
 if __name__ == "__main__":
