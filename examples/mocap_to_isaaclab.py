@@ -450,7 +450,8 @@ def create_articulation(usd_path, start_pos=(0.0, 0.0, DEFAULT_HIPS_HEIGHT)):
 
     Spawns at container path, points ArticulationCfg at Hips subtree
     (avoids dual articulation root from MJCF converter).
-    Gravity disabled for kinematic driving.
+    Gravity disabled for kinematic driving (collisions: see
+    disable_collisions()).
     """
     spawn_path = "/World/envs/env_0/character"
 
@@ -537,6 +538,61 @@ def create_robot_articulation(usd_path, robot_root_name="pelvis", start_pos=(2.0
     )
 
     return Articulation(art_cfg)
+
+
+def disable_collisions(prim_paths):
+    """Turn off every collider under ``prim_paths``.
+
+    The MOVIN character and the robot only visualize the pose written to them
+    every frame.  Left on, their colliders push each other (overlay, or
+    side_by_side when they come close) and the ground, moving the bodies away
+    from the written pose during the physics step.
+
+    The MJCF importer puts the colliders inside instanced prims, which can be
+    neither edited nor reliably filtered (PhysX builds instanced colliders
+    from their prototype), so the instances under these subtrees are made
+    local first.  Call before ``sim.reset()``.
+
+    Returns:
+        The number of colliders disabled.
+    """
+    import omni.usd
+    from pxr import Usd, UsdPhysics
+
+    stage = omni.usd.get_context().get_stage()
+    disabled = 0
+    for path in prim_paths:
+        root = stage.GetPrimAtPath(path)
+        if not root.IsValid():
+            continue
+        while True:  # instances can nest: repeat until none is left
+            instances = [prim for prim in Usd.PrimRange(root) if prim.IsInstance()]
+            if not instances:
+                break
+            for prim in instances:
+                prim.SetInstanceable(False)
+        for prim in Usd.PrimRange(root):
+            if prim.HasAPI(UsdPhysics.CollisionAPI):
+                UsdPhysics.CollisionAPI(prim).CreateCollisionEnabledAttr().Set(False)
+                disabled += 1
+    return disabled
+
+
+def pose_drift(art, root_pose_t, dof_pos_t):
+    """How far a kinematically driven articulation moved during a physics step.
+
+    Every frame writes the root pose, the joint positions and zero velocities;
+    gravity is off and the drives have no gains, so the step should leave that
+    state as written.  Whatever moved it (e.g. contacts) shows up here.
+
+    Returns:
+        (root position error in m, largest joint position error in rad)
+    """
+    root = float(torch.linalg.norm(art.data.root_link_pos_w[0] - root_pose_t[0, :3]))
+    joints = 0.0
+    if dof_pos_t is not None and dof_pos_t.shape[1] > 0:
+        joints = float((art.data.joint_pos[0] - dof_pos_t[0]).abs().max())
+    return root, joints
 
 
 def close_app(sim):
@@ -820,6 +876,15 @@ def main():
             start_pos=(robot_start_x, 0.0, 0.8),
         )
 
+    # ---- The articulations only visualize: no collisions (before sim.reset()) ----
+    visual_roots = [
+        path for path, art in ((CHARACTER_ROOT_PATH, articulation), (ROBOT_ROOT_PATH, robot_articulation))
+        if art is not None
+    ]
+    if visual_roots:
+        count = disable_collisions(visual_roots)
+        print(f"[INFO] Collisions disabled on {count} colliders (visualization only)")
+
     # ---- Initialize simulation ----
     sim.reset()
     print("[INFO] Simulation initialized")
@@ -1034,6 +1099,8 @@ def main():
     last_robot_root_pos = np.array([0.0, 0.0, 0.8])
     last_frame_bones = None
     has_first_frame = False
+    robot_state_written = False
+    drift_max = [0.0, 0.0]  # --debug: worst pose drift since the last report (m, rad)
 
     # Pre-allocate tensors (reuse each frame to avoid CPU->GPU allocation overhead)
     env_ids = torch.tensor([0], dtype=torch.long, device=sim.device)
@@ -1222,6 +1289,7 @@ def main():
                         robot_articulation.write_joint_state_to_sim(
                             robot_dof_pos_t, robot_dof_vel_t, env_ids=robot_env_ids
                         )
+                        robot_state_written = True
 
                         if args.debug and frame_count % max(1, int(control_fps * 2)) == 0:
                             ik_err = retargeter._error1()
@@ -1264,6 +1332,19 @@ def main():
             if robot_articulation is not None:
                 robot_articulation.update(sim.get_physics_dt())
 
+            # ---- Pose drift (--debug) ----
+            # The articulations only visualize the written state; report how
+            # far the physics step moved them away from it.
+            if args.debug and has_first_frame:
+                drifts = []
+                if articulation is not None:
+                    drifts.append(pose_drift(articulation, root_pose_t, dof_pos_t))
+                if robot_articulation is not None and robot_state_written:
+                    drifts.append(pose_drift(robot_articulation, robot_root_pose_t, robot_dof_pos_t))
+                for root_err, joint_err in drifts:
+                    drift_max[0] = max(drift_max[0], root_err)
+                    drift_max[1] = max(drift_max[1], joint_err)
+
             # ---- Camera tracking ----
             if camera is not None:
                 if robot_enabled and args.robot_view == "robot_only":
@@ -1292,6 +1373,10 @@ def main():
                         info += f" | BVH frame: {bvh_frame_idx}/{num_frames}"
                     if args.mode in ("live", "replay") and receiver:
                         info += f" | Recv rate: {receiver.get_receive_rate():.1f} Hz"
+                    if articulation is not None or robot_articulation is not None:
+                        info += (f" | Pose drift: {drift_max[0] * 1000.0:.2f} mm, "
+                                 f"{np.degrees(drift_max[1]):.2f} deg")
+                        drift_max = [0.0, 0.0]
                     print(info)
                     frame_count = 0
                     last_fps_time = now

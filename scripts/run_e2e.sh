@@ -4,8 +4,10 @@
 # Runs every input mode (bvh, live, replay) with both skeleton presets, all view
 # modes and both robots. Live mode is fed by scripts/fake_movin_studio.py, its
 # --record output is then replayed, so no MOVIN Studio or mocap rig is needed.
-# A scenario passes when the app reaches --max_frames, exits with status 0 and
-# logs no Python traceback, crash or retarget error.
+# A scenario passes when the app reaches --max_frames, exits with status 0,
+# logs no Python traceback, crash or retarget error, and its articulations stay
+# where they are written (the --debug "Pose drift" stays within DRIFT_MM /
+# DRIFT_DEG: nothing, e.g. a contact, moves them during the physics step).
 #
 # Usage (from an environment where Isaac Lab is installed):
 #   scripts/run_e2e.sh              # headless
@@ -37,6 +39,8 @@ export OMNI_KIT_ACCEPT_EULA=${OMNI_KIT_ACCEPT_EULA:-YES} PYTHONUNBUFFERED=1
 cd "$ROOT"
 
 failures=0
+DRIFT_MM=1.0
+DRIFT_DEG=0.5
 run() {  # name, bvh to stream (or -), max_frames, args...
   local name=$1 stream_bvh=$2 frames=$3; shift 3
   [[ -n "$FILTER" && ! "$name" =~ $FILTER ]] && return
@@ -56,14 +60,21 @@ run() {  # name, bvh to stream (or -), max_frames, args...
   local rc=$? secs=$(( SECONDS - t0 ))
   if [[ -n "$sender" ]]; then kill "$sender" 2>/dev/null; wait "$sender" 2>/dev/null; fi
 
-  local tracebacks crashes retarget_errors preset fps ik status=PASS
+  local tracebacks crashes retarget_errors preset fps ik drift status=PASS
   tracebacks=$(grep -c "^Traceback (most recent call last)" "$log")
   crashes=$(grep -c "A crash has occurred" "$log")
   retarget_errors=$(grep -c "Retarget error" "$log")
   preset=$(grep -oP "Skeleton preset: \K\S+" "$log" | head -1)
   fps=$(grep -oP "Render FPS: \K[0-9.]+" "$log" | tail -1)
   ik=$(grep -oP "IK error: \K[0-9.]+" "$log" | tail -1)
+  # Worst pose drift over the run, "<mm>/<deg>", empty without articulations.
+  drift=$(grep -oP "Pose drift: \K[0-9.]+ mm, [0-9.]+" "$log" |
+          awk -F' mm, ' '{ if ($1 + 0 > r) r = $1 + 0; if ($2 + 0 > d) d = $2 + 0; n++ }
+                         END { if (n) printf "%.2f/%.2f", r, d }')
   if [[ $rc -ne 0 || $tracebacks -ne 0 || $crashes -ne 0 || $retarget_errors -ne 0 ]]; then
+    status=FAIL
+  elif [[ -n "$drift" ]] && awk -v d="$drift" -v mm="$DRIFT_MM" -v deg="$DRIFT_DEG" \
+      'BEGIN { split(d, v, "/"); exit !(v[1] > mm || v[2] > deg) }'; then
     status=FAIL
   elif [[ "$name" == *print_joints* ]]; then
     grep -q "Isaac Lab Joint Order" "$log" || status=FAIL
@@ -71,8 +82,8 @@ run() {  # name, bvh to stream (or -), max_frames, args...
     grep -q "Reached --max_frames" "$log" || status=FAIL
   fi
   [[ $status == FAIL ]] && failures=$((failures + 1))
-  printf "%-4s %-30s rc=%-3s %4ss  preset=%-12s fps=%-6s ik_err=%s\n" \
-    "$status" "$name" "$rc" "$secs" "${preset:--}" "${fps:--}" "${ik:--}" | tee -a "$OUT/summary.txt"
+  printf "%-4s %-30s rc=%-3s %4ss  preset=%-12s fps=%-6s ik_err=%-7s drift_mm/deg=%s\n" \
+    "$status" "$name" "$rc" "$secs" "${preset:--}" "${fps:--}" "${ik:--}" "${drift:--}" | tee -a "$OUT/summary.txt"
 }
 
 V3=data/test_V3.bvh

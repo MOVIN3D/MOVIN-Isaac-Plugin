@@ -319,7 +319,7 @@ The generator mirrors geom and actuator styling from the SDK's packaged legacy `
 | `--mesh_npz` | `<path>` | Mesh NPZ for the overlay (default: the preset's mesh packaged with the SDK) |
 | `--no_fit` | | Use the SDK's reference-proportion skeleton and mesh as-is (default: fit them to the actor) |
 | `--headless` | | No GUI window |
-| `--debug` | | Print FPS and debug info |
+| `--debug` | | Print FPS, pose drift and debug info |
 | `--max_frames` | int | Exit the main loop after N frames (mainly for headless testing) |
 | `--print_joints` | | Print the Isaac Lab and skeleton joint order, then exit |
 
@@ -362,8 +362,10 @@ retargeter input).
 
 `scripts/run_e2e.sh` runs the full pipeline in Isaac Lab: BVH playback with both presets,
 every view mode and both robots, live mode fed by the fake stream with `--record`, and
-replay of those recordings. Each scenario must reach `--max_frames`, exit cleanly and log no
-traceback, crash or retarget error.
+replay of those recordings. Each scenario must reach `--max_frames`, exit cleanly, log no
+traceback, crash or retarget error, and keep its articulations where they are written: the
+`--debug` *pose drift* (how far the physics step moved the character and robot away from the
+pose written to them) must stay within 1 mm / 0.5 deg.
 
 ```bash
 scripts/run_e2e.sh            # headless (about 2 minutes)
