@@ -212,6 +212,7 @@ from bvh_utils import (
     process_bvh_frame_for_isaaclab,
     extract_bvh_local_quats_yup,
 )
+from robot_pose import robot_root_pose
 from skeleton_assets import prepare_skeleton_asset, proportions_key
 
 CHARACTER_ROOT_PATH = "/World/envs/env_0/character"
@@ -1186,12 +1187,14 @@ def main():
 
                         qpos = retargeter.retarget(filtered)
 
-                        robot_root_pos = qpos[:3].copy()
-                        robot_root_quat = qpos[3:7].copy()
+                        # Same forward-mode transform as the character, then
+                        # the side-by-side offset along world X.
+                        robot_root_pos, robot_root_quat = robot_root_pose(
+                            qpos,
+                            forward_mode=args.forward_mode,
+                            x_offset=args.robot_offset if args.robot_view == "side_by_side" else 0.0,
+                        )
                         robot_joints = qpos[7:].copy()
-
-                        if args.robot_view == "side_by_side":
-                            robot_root_pos[0] += args.robot_offset
                         last_robot_root_pos = robot_root_pos
 
                         if robot_reorder_map is not None and robot_dof_reordered is not None:

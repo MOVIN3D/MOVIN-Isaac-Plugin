@@ -74,6 +74,7 @@ MOVIN-Isaac-Plugin/
     mocap_to_isaaclab.py         # MOVIN -> Isaac Lab visualization
     bvh_utils.py                 # BVH loader + BVH->Isaac/retarget conversion (plugin-owned)
     skeleton_assets.py           # Skeleton MJCF selection (reference / actor-fitted) + USD cache layout
+    robot_pose.py                # Retargeted robot root pose in Isaac (forward mode, side-by-side offset)
   scripts/
     generate_skeleton_mjcf.py    # Generate a skeleton MJCF from a T-pose BVH
     extract_movinman_mesh.py     # Extract mesh + skin weights from a MOVIN FBX into an NPZ (runs in Blender)
@@ -86,6 +87,7 @@ MOVIN-Isaac-Plugin/
                                  # (when Blender is available) the extractor
     test_fake_studio_stream.py   # Checks the fake MOVIN Studio stream against the BVH path
     test_fitting.py              # Checks body-proportion fitting, BVH sizing and the USD cache layout
+    test_robot_pose.py           # Checks that the robot follows the character's forward mode
   data/
     MOVINMan_dump.xml            # MOVINMan FBX dump
     MOVINman_V3_local_rotation_identity.fbx
@@ -307,7 +309,7 @@ The generator mirrors geom and actuator styling from the SDK's packaged legacy `
 | `--bvh_file` | `<path>` | BVH file for playback mode |
 | `--bvh_scale` | float | Position scale factor (auto-detected if not set) |
 | `--view_mode` | `skeleton`, `mesh`, `mesh_skeleton` | Visualization mode |
-| `--forward_mode` | `coord_equivalent`, `isaac_world` | Facing direction (`isaac_world` = +90 deg yaw for Isaac +X) |
+| `--forward_mode` | `coord_equivalent`, `isaac_world` | Facing direction (`isaac_world` = +90 deg yaw for Isaac +X; the robot is turned with the character) |
 | `--record` | `<path>` | Record live session to `.pkl` file |
 | `--recording` | `<path>` | Replay from recorded `.pkl` file |
 | `--robot` | `unitree_g1`, `unitree_g1_with_hands` | Enable robot retargeting |
