@@ -88,6 +88,7 @@ MOVIN-Isaac-Plugin/
     test_fake_studio_stream.py   # Checks the fake MOVIN Studio stream against the BVH path
     test_fitting.py              # Checks body-proportion fitting, BVH sizing and the USD cache layout
     test_robot_pose.py           # Checks that the robot follows the character's forward mode
+    test_bvh_units.py            # Checks that a centimeter BVH plays like the same clip in meters
   data/
     MOVINMan_dump.xml            # MOVINMan FBX dump
     MOVINman_V3_local_rotation_identity.fbx
@@ -307,7 +308,7 @@ The generator mirrors geom and actuator styling from the SDK's packaged legacy `
 | `--preset` | `auto`, `movinman`, `movinman_v3` | Skeleton preset (default: `auto`, detected from the data source) |
 | `--port` | int (default: 11235) | UDP port for live mocap |
 | `--bvh_file` | `<path>` | BVH file for playback mode |
-| `--bvh_scale` | float | Position scale factor (auto-detected if not set) |
+| `--bvh_scale` | float | Factor converting BVH positions to meters, for the character, mesh and robot alike (auto-detected: `0.01` for centimeter files, else `1`) |
 | `--view_mode` | `skeleton`, `mesh`, `mesh_skeleton` | Visualization mode |
 | `--forward_mode` | `coord_equivalent`, `isaac_world` | Facing direction (`isaac_world` = +90 deg yaw for Isaac +X; the robot is turned with the character) |
 | `--record` | `<path>` | Record live session to `.pkl` file |

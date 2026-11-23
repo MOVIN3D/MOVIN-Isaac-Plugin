@@ -208,6 +208,7 @@ from movin_sdk_python.utils.skeleton_presets import (
 from bvh_utils import (
     read_bvh,
     load_bvh_file,
+    detect_bvh_scale,
     bvh_rest_bones,
     process_bvh_frame_for_isaaclab,
     extract_bvh_local_quats_yup,
@@ -606,16 +607,6 @@ def close_app(sim):
     sim.clear_all_callbacks()
     sim.clear_instance()
     simulation_app.close()
-
-
-def detect_bvh_scale(bvh_data):
-    """Auto-detect whether BVH positions are in centimeters or meters."""
-    root_y_values = bvh_data.pos[:, 0, 1]  # root Y position (height in Y-up)
-    avg_height = np.mean(np.abs(root_y_values))
-    if avg_height > 10.0:
-        return 0.01
-    else:
-        return 1.0
 
 
 def get_bvh_fps(bvh_file):
@@ -1078,14 +1069,18 @@ def main():
         print(f"[INFO]   Position scale: {bvh_scale} ({'cm->m' if bvh_scale < 1.0 else 'already meters'})")
 
         if robot_enabled and retargeter is not None:
-            bvh_retarget_frames, _, _, _ = load_bvh_file(args.bvh_file, human_height=args.human_height)
+            # In meters, like the live stream (a cm BVH would otherwise reach
+            # the Retargeter 100x too large).
+            bvh_retarget_frames, _, _, _ = load_bvh_file(
+                args.bvh_file, human_height=args.human_height, scale=bvh_scale
+            )
             print(f"[INFO] Precomputed {len(bvh_retarget_frames)} BVH retarget frames")
             if args.human_height == "auto":
                 # The precomputed frames go straight to retarget(), bypassing
                 # process_mocap_frame(), which is where "auto" measures the
-                # actor.  Measure it once from the BVH's rest offsets, in the
-                # file's units like the precomputed frames.
-                retargeter.process_mocap_frame(bvh_rest_bones(bvh_data))
+                # actor.  Measure it once from the BVH's rest offsets (meters,
+                # like the precomputed frames).
+                retargeter.process_mocap_frame(bvh_rest_bones(bvh_data, bvh_scale))
                 print(f"[INFO] Robot targets sized from the BVH OFFSETs "
                       f"(body scale {retargeter.body_scale:.3f})")
 

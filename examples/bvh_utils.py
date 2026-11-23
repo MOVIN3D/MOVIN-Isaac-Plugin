@@ -7,7 +7,9 @@ recording") removed every BVH code path from the SDK (``utils/bvh_loader.py``,
 The plugin's ``--mode bvh`` still needs them, so they live here now.  The code
 is the SDK's former implementation, unchanged apart from imports.
 ``bvh_rest_bones`` is the plugin's own addition: it feeds a BVH's offsets to
-the SDK's body-proportion fitting.
+the SDK's body-proportion fitting; ``load_bvh_file`` also takes the unit
+scale (``detect_bvh_scale``, moved here from the example) so centimeter BVHs
+retarget like meter ones.
 """
 
 import re
@@ -216,14 +218,30 @@ def bvh_rest_bones(data, scale=1.0):
     return bones
 
 
-def load_bvh_file(bvh_file, human_height=1.75):
+def detect_bvh_scale(bvh_data):
+    """Factor converting a BVH's positions to meters: 0.01 for centimeters, else 1.
+
+    Decided from the root height (Y): above 10 units on average means cm.
+    """
+    root_y_values = bvh_data.pos[:, 0, 1]  # root Y position (height in Y-up)
+    avg_height = np.mean(np.abs(root_y_values))
+    if avg_height > 10.0:
+        return 0.01
+    else:
+        return 1.0
+
+
+def load_bvh_file(bvh_file, human_height=1.75, scale=1.0):
     """Load a BVH into per-frame {bone: [global_pos_zup, global_quat_zup]}
     dicts as consumed by ``Retargeter.retarget`` (formerly
     ``Retargeter.load_bvh`` / ``utils.bvh_loader.load_bvh_file``).
 
+    ``scale`` multiplies every position, converting the file's units to the
+    meters the Retargeter works in (see ``detect_bvh_scale``).
+
     Returns (frames, human_height, parents, bones)."""
     data = read_bvh(bvh_file)
-    global_data = quat_fk(data.quats, data.pos, data.parents)
+    global_data = quat_fk(data.quats, data.pos * scale, data.parents)
 
     rotation_matrix = np.array([[1, 0, 0], [0, 0, -1], [0, 1, 0]])
     rotation_quat = R.from_matrix(rotation_matrix).as_quat(scalar_first=True)
