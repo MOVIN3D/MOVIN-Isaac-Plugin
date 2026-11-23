@@ -6,6 +6,6 @@ setup(
     packages=find_packages(where='movin_sdk_python', include=['movin_sdk_python', 'movin_sdk_python.*']),
     package_dir={'': 'movin_sdk_python'},
     package_data={
-        'movin_sdk_python': ['**/*.xml', '**/*.json', '**/*.STL'],
+        'movin_sdk_python': ['**/*.xml', '**/*.json', '**/*.STL', '**/*.npz'],
     },
 )

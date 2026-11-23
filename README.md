@@ -49,6 +49,11 @@ uv pip install "isaaclab[isaacsim]==2.3.2.post1" -e . \
 
 With plain pip, drop `uv` from the `pip install` lines and `--index-strategy unsafe-best-match`.
 
+MOVIN-SDK-Python comes with the plugin as the `movin_sdk_python` submodule, and `pip install -e .`
+installs it from there. Do not also install a separate MOVIN-SDK-Python checkout into the same
+environment: two installations of the `movin_sdk_python` package shadow each other, and the plugin
+can end up importing the other one.
+
 If you already cloned without `--recurse-submodules`:
 
 ```bash
@@ -89,6 +94,7 @@ MOVIN-Isaac-Plugin/
     test_fitting.py              # Checks body-proportion fitting, BVH sizing and the USD cache layout
     test_robot_pose.py           # Checks that the robot follows the character's forward mode
     test_bvh_units.py            # Checks that a centimeter BVH plays like the same clip in meters
+    test_packaging.py            # Checks that the plugin's packaging ships every SDK package file
   data/
     MOVINMan_dump.xml            # MOVINMan FBX dump
     MOVINman_V3_local_rotation_identity.fbx
