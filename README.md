@@ -169,6 +169,8 @@ python examples/mocap_to_isaaclab.py --mode live --port 11235 \
     --view_mode mesh_skeleton --record data/recordings/session.pkl
 ```
 
+Stop recording by closing the window or pressing `Ctrl+C` in the terminal: either way the example finishes the current frame, writes the recording and releases the UDP port. A second `Ctrl+C` force-quits, except while the recording is being written.
+
 ### Replay
 
 Replay requires a `.pkl` file previously created with `--record` (see above).

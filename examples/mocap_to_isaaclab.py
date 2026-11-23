@@ -50,6 +50,7 @@ Requires Isaac Lab (isaaclab) to be installed and available in the Python enviro
 import argparse
 import enum
 import os
+import signal
 import sys
 import time
 
@@ -127,6 +128,37 @@ cli_args = parser.parse_args()
 
 app_launcher = AppLauncher(cli_args)
 simulation_app = app_launcher.app
+
+
+class StopOnCtrlC:
+    """First Ctrl+C asks the main loop to stop; a second one force-quits.
+
+    Isaac Lab's own SIGINT handler closes the app and raises KeyboardInterrupt
+    from wherever the main loop happens to be, which skips the cleanup that
+    saves a --record recording and stops the receiver.  With this handler the
+    loop ends after the current frame and the normal cleanup runs; pressing
+    Ctrl+C again falls back to the previous (Isaac Lab) handler, except while
+    the cleanup is writing the recording (``saving``), which a force-quit
+    would leave truncated.
+    """
+
+    def __init__(self, fallback):
+        self.requested = False
+        self.saving = False
+        self._fallback = fallback
+
+    def __call__(self, signum, frame):
+        if self.saving:
+            print("\n[INFO] Ctrl+C: finishing the recording first", flush=True)
+            return
+        if self.requested and callable(self._fallback):
+            return self._fallback(signum, frame)
+        self.requested = True
+        print("\n[INFO] Ctrl+C: stopping (press Ctrl+C again to force quit)", flush=True)
+
+
+stop_request = StopOnCtrlC(signal.getsignal(signal.SIGINT))
+signal.signal(signal.SIGINT, stop_request)
 
 # ---- Now safe to import omniverse/isaaclab modules ----
 import carb
@@ -594,13 +626,18 @@ def main():
             skip_hint = "--preset with --no_fit" if fit_enabled else "--preset"
             print(f"[INFO] Waiting for the first mocap frame to {' and '.join(purposes)}... "
                   f"(pass {skip_hint} to skip)")
-            while first_frame is None and simulation_app.is_running():
+            while (first_frame is None and simulation_app.is_running()
+                   and not stop_request.requested):
                 # Pump the Kit app so the window stays responsive and
                 # is_running() reflects a window close while we wait.
                 simulation_app.update()
                 first_frame = receiver.get_latest_frame()
                 if first_frame is None:
                     time.sleep(0.05)
+            if first_frame is None and (stop_request.requested or not simulation_app.is_running()):
+                receiver.stop()
+                simulation_app.close()
+                return
 
         if explicit_preset:
             preset = get_preset(args.preset)
@@ -1018,248 +1055,255 @@ def main():
     if mesh_enabled and articulation is not None:
         print("[INFO] Controls: M=toggle mesh, K=toggle skeleton")
 
-    while simulation_app.is_running():
-        # ---- Pause loop (MimicKit _render pattern) ----
-        # Keep rendering + processing keyboard events while paused
-        if play_mode == PlayMode.PAUSE:
-            if camera is not None:
-                camera.update(last_root_pos)
-            sim.render()
-            playback_start_time = None  # reset so we re-sync on resume
-            continue
+    try:
+        while simulation_app.is_running() and not stop_request.requested:
+            # ---- Pause loop (MimicKit _render pattern) ----
+            # Keep rendering + processing keyboard events while paused
+            if play_mode == PlayMode.PAUSE:
+                if camera is not None:
+                    camera.update(last_root_pos)
+                sim.render()
+                playback_start_time = None  # reset so we re-sync on resume
+                continue
 
-        # ---- Get new frame data ----
-        if args.mode in ("live", "replay"):
-            frame = receiver.get_latest_frame()
-            if frame is not None:
-                if not mesh_only and not skip_movin_character:
-                    root_pos, root_quat, dof_values = process_movin_bones_for_isaaclab(
-                        frame["bones"],
+            # ---- Get new frame data ----
+            if args.mode in ("live", "replay"):
+                frame = receiver.get_latest_frame()
+                if frame is not None:
+                    if not mesh_only and not skip_movin_character:
+                        root_pos, root_quat, dof_values = process_movin_bones_for_isaaclab(
+                            frame["bones"],
+                            skeleton_bone_names=preset.joint_bones,
+                            forward_mode=args.forward_mode,
+                        )
+                        last_root_pos = root_pos
+                        last_root_quat = root_quat
+                        last_dof_values = dof_values
+
+                    if mesh_enabled:
+                        last_mesh_bones = frame["bones"]
+                        if mesh_only:
+                            # Root only (no joints), with the forward mode applied,
+                            # for the camera to follow.
+                            last_root_pos, _, _ = process_movin_bones_for_isaaclab(
+                                frame["bones"],
+                                skeleton_bone_names=(),
+                                forward_mode=args.forward_mode,
+                            )
+
+                    if fitted_proportions is not None:
+                        key = proportions_key(frame["bones"], preset.body_names)
+                        if key != seen_proportions:
+                            seen_proportions = key
+                            if key != fitted_proportions:
+                                notes = []
+                                if skeleton_fitted:
+                                    notes.append("the skeleton keeps the proportions it was "
+                                                 "fitted to at startup (restart to refit it)")
+                                if mesh_fit:
+                                    notes.append("the mesh refits automatically")
+                                print("[WARN] The streamed body proportions changed (actor "
+                                      "recalibrated or switched): " + "; ".join(notes))
+
+                    last_frame_bones = frame["bones"]
+                    has_first_frame = True
+
+            elif args.mode == "bvh":
+                # Time-based frame advancement: skip frames if rendering is slow
+                # so that motion always plays at real-time speed
+                now = time.time()
+                if playback_start_time is None:
+                    playback_start_time = now
+                    playback_start_frame = bvh_frame_idx
+
+                elapsed = now - playback_start_time
+                target_frame = playback_start_frame + int(elapsed * control_fps)
+                bvh_frame_idx = target_frame % num_frames
+
+                frame_quats = bvh_data.quats[bvh_frame_idx]
+                frame_pos = bvh_data.pos[bvh_frame_idx]
+
+                if not mesh_only:
+                    root_pos, root_quat, dof_values = process_bvh_frame_for_isaaclab(
+                        frame_quats, frame_pos, bvh_data.bones,
                         skeleton_bone_names=preset.joint_bones,
                         forward_mode=args.forward_mode,
                     )
+                    root_pos = root_pos * bvh_scale
                     last_root_pos = root_pos
                     last_root_quat = root_quat
                     last_dof_values = dof_values
 
                 if mesh_enabled:
-                    last_mesh_bones = frame["bones"]
+                    mesh_quats, mesh_root = extract_bvh_local_quats_yup(
+                        frame_quats, frame_pos, bvh_data.bones,
+                        skeleton_body_names=preset.body_names,
+                    )
+                    last_mesh_local_quats_yup = mesh_quats
+                    last_mesh_root_pos_yup = mesh_root * bvh_scale
                     if mesh_only:
-                        # Root only (no joints), with the forward mode applied,
-                        # for the camera to follow.
-                        last_root_pos, _, _ = process_movin_bones_for_isaaclab(
-                            frame["bones"],
+                        # Root only, with the forward mode applied, for the camera.
+                        root_pos, _, _ = process_bvh_frame_for_isaaclab(
+                            frame_quats, frame_pos, bvh_data.bones,
                             skeleton_bone_names=(),
                             forward_mode=args.forward_mode,
                         )
+                        last_root_pos = root_pos * bvh_scale
 
-                if fitted_proportions is not None:
-                    key = proportions_key(frame["bones"], preset.body_names)
-                    if key != seen_proportions:
-                        seen_proportions = key
-                        if key != fitted_proportions:
-                            notes = []
-                            if skeleton_fitted:
-                                notes.append("the skeleton keeps the proportions it was "
-                                             "fitted to at startup (restart to refit it)")
-                            if mesh_fit:
-                                notes.append("the mesh refits automatically")
-                            print("[WARN] The streamed body proportions changed (actor "
-                                  "recalibrated or switched): " + "; ".join(notes))
-
-                last_frame_bones = frame["bones"]
                 has_first_frame = True
 
-        elif args.mode == "bvh":
-            # Time-based frame advancement: skip frames if rendering is slow
-            # so that motion always plays at real-time speed
-            now = time.time()
-            if playback_start_time is None:
-                playback_start_time = now
-                playback_start_frame = bvh_frame_idx
+            # ---- Write state to articulation ----
+            if has_first_frame and articulation is not None:
+                if dof_reordered is not None:
+                    dof_reordered[:] = 0.0
+                    dof_reordered[reorder_map] = last_dof_values
+                    dof_src = dof_reordered
+                else:
+                    dof_src = last_dof_values
 
-            elapsed = now - playback_start_time
-            target_frame = playback_start_frame + int(elapsed * control_fps)
-            bvh_frame_idx = target_frame % num_frames
+                # Update pre-allocated tensors in-place (avoids per-frame allocation)
+                root_pose_t[0, :3] = torch.from_numpy(last_root_pos).float()
+                root_pose_t[0, 3:] = torch.from_numpy(last_root_quat).float()
+                dof_pos_t[0, :] = torch.from_numpy(dof_src).float()
 
-            frame_quats = bvh_data.quats[bvh_frame_idx]
-            frame_pos = bvh_data.pos[bvh_frame_idx]
+                articulation.write_root_link_pose_to_sim(root_pose_t, env_ids)
+                articulation.write_root_link_velocity_to_sim(root_vel, env_ids)
+                articulation.write_joint_state_to_sim(dof_pos_t, dof_vel_t, env_ids=env_ids)
 
-            if not mesh_only:
-                root_pos, root_quat, dof_values = process_bvh_frame_for_isaaclab(
-                    frame_quats, frame_pos, bvh_data.bones,
-                    skeleton_bone_names=preset.joint_bones,
-                    forward_mode=args.forward_mode,
-                )
-                root_pos = root_pos * bvh_scale
-                last_root_pos = root_pos
-                last_root_quat = root_quat
-                last_dof_values = dof_values
+            # ---- Robot retargeting ----
+            if robot_enabled and has_first_frame and retargeter is not None:
+                try:
+                    retarget_input = None
 
-            if mesh_enabled:
-                mesh_quats, mesh_root = extract_bvh_local_quats_yup(
-                    frame_quats, frame_pos, bvh_data.bones,
-                    skeleton_body_names=preset.body_names,
-                )
-                last_mesh_local_quats_yup = mesh_quats
-                last_mesh_root_pos_yup = mesh_root * bvh_scale
-                if mesh_only:
-                    # Root only, with the forward mode applied, for the camera.
-                    root_pos, _, _ = process_bvh_frame_for_isaaclab(
-                        frame_quats, frame_pos, bvh_data.bones,
-                        skeleton_bone_names=(),
+                    if args.mode in ("live", "replay") and last_frame_bones is not None:
+                        retarget_input = retargeter.process_mocap_frame(last_frame_bones)
+                    elif args.mode == "bvh" and bvh_retarget_frames is not None:
+                        retarget_input = bvh_retarget_frames[bvh_frame_idx]
+
+                    if retarget_input is not None:
+                        required = retargeter.get_required_bones()
+                        filtered = {k: v for k, v in retarget_input.items() if k in required}
+
+                        qpos = retargeter.retarget(filtered)
+
+                        robot_root_pos = qpos[:3].copy()
+                        robot_root_quat = qpos[3:7].copy()
+                        robot_joints = qpos[7:].copy()
+
+                        if args.robot_view == "side_by_side":
+                            robot_root_pos[0] += args.robot_offset
+                        last_robot_root_pos = robot_root_pos
+
+                        if robot_reorder_map is not None and robot_dof_reordered is not None:
+                            robot_dof_reordered[:] = 0.0
+                            n_joints = min(len(robot_joints), len(robot_reorder_map))
+                            for mj_i in range(n_joints):
+                                robot_dof_reordered[robot_reorder_map[mj_i]] = robot_joints[mj_i]
+                            robot_joints_ordered = robot_dof_reordered
+                        else:
+                            robot_joints_ordered = robot_joints
+
+                        robot_root_pose_t[0, :3] = torch.from_numpy(robot_root_pos).float()
+                        robot_root_pose_t[0, 3:] = torch.from_numpy(robot_root_quat).float()
+                        n_write = min(len(robot_joints_ordered), robot_num_dofs)
+                        robot_dof_pos_t[0, :n_write] = torch.from_numpy(
+                            robot_joints_ordered[:n_write].astype(np.float32)
+                        )
+
+                        robot_articulation.write_root_link_pose_to_sim(
+                            robot_root_pose_t, robot_env_ids
+                        )
+                        robot_articulation.write_root_link_velocity_to_sim(
+                            robot_root_vel, robot_env_ids
+                        )
+                        robot_articulation.write_joint_state_to_sim(
+                            robot_dof_pos_t, robot_dof_vel_t, env_ids=robot_env_ids
+                        )
+
+                        if args.debug and frame_count % max(1, int(control_fps * 2)) == 0:
+                            ik_err = retargeter._error1()
+                            print(f"[ROBOT DEBUG] IK error: {ik_err:.4f} | "
+                                  f"Root: [{robot_root_pos[0]:.3f}, {robot_root_pos[1]:.3f}, {robot_root_pos[2]:.3f}]")
+
+                except Exception as exc:
+                    if args.debug:
+                        print(f"[WARN] Retarget error: {exc}")
+
+            # ---- Mesh overlay update ----
+            if mesh_enabled and mesh_model is not None and mesh_overlay is not None:
+                vertices = None
+                if last_mesh_bones is not None:
+                    # pose_from_bones refits only when the streamed offsets change.
+                    try:
+                        vertices = mesh_model.pose_from_bones(
+                            last_mesh_bones, forward_mode=args.forward_mode, fit=mesh_fit
+                        )
+                    except ValueError as exc:
+                        print(f"[WARN] Mesh refit failed, keeping the current proportions: {exc}")
+                        mesh_fit = False
+                        vertices = mesh_model.pose_from_bones(
+                            last_mesh_bones, forward_mode=args.forward_mode, fit=False
+                        )
+                elif last_mesh_local_quats_yup is not None and last_mesh_root_pos_yup is not None:
+                    vertices = mesh_model.pose_vertices(
+                        last_mesh_local_quats_yup,
+                        last_mesh_root_pos_yup,
                         forward_mode=args.forward_mode,
                     )
-                    last_root_pos = root_pos * bvh_scale
+                if vertices is not None:
+                    mesh_overlay.update_vertices(vertices)
+                    mesh_overlay.set_visible(mesh_user_visible)
 
-            has_first_frame = True
+            # ---- Step + render ----
+            sim.step()
+            if articulation is not None:
+                articulation.update(sim.get_physics_dt())
+            if robot_articulation is not None:
+                robot_articulation.update(sim.get_physics_dt())
 
-        # ---- Write state to articulation ----
-        if has_first_frame and articulation is not None:
-            if dof_reordered is not None:
-                dof_reordered[:] = 0.0
-                dof_reordered[reorder_map] = last_dof_values
-                dof_src = dof_reordered
-            else:
-                dof_src = last_dof_values
+            # ---- Camera tracking ----
+            if camera is not None:
+                if robot_enabled and args.robot_view == "robot_only":
+                    camera.update(last_robot_root_pos)
+                else:
+                    camera.update(last_root_pos)
 
-            # Update pre-allocated tensors in-place (avoids per-frame allocation)
-            root_pose_t[0, :3] = torch.from_numpy(last_root_pos).float()
-            root_pose_t[0, 3:] = torch.from_numpy(last_root_quat).float()
-            dof_pos_t[0, :] = torch.from_numpy(dof_src).float()
+            # ---- One-step mode: advance one BVH frame then pause ----
+            if play_mode == PlayMode.ONE_STEP:
+                play_mode = PlayMode.PAUSE
 
-            articulation.write_root_link_pose_to_sim(root_pose_t, env_ids)
-            articulation.write_root_link_velocity_to_sim(root_vel, env_ids)
-            articulation.write_joint_state_to_sim(dof_pos_t, dof_vel_t, env_ids=env_ids)
+            # ---- Max frames limit (headless testing) ----
+            total_steps += 1
+            if args.max_frames is not None and total_steps >= args.max_frames:
+                print(f"[INFO] Reached --max_frames ({args.max_frames}), exiting main loop")
+                break
 
-        # ---- Robot retargeting ----
-        if robot_enabled and has_first_frame and retargeter is not None:
+            # ---- FPS tracking ----
+            frame_count += 1
+            if args.debug:
+                now = time.time()
+                if now - last_fps_time >= 2.0:
+                    fps = frame_count / (now - last_fps_time)
+                    info = f"[DEBUG] Render FPS: {fps:.1f} (target: {control_fps:.0f})"
+                    if args.mode == "bvh":
+                        info += f" | BVH frame: {bvh_frame_idx}/{num_frames}"
+                    if args.mode in ("live", "replay") and receiver:
+                        info += f" | Recv rate: {receiver.get_receive_rate():.1f} Hz"
+                    print(info)
+                    frame_count = 0
+                    last_fps_time = now
+    finally:
+        # ---- Cleanup ----
+        # Runs on a normal exit, Ctrl+C and errors alike, so a --record
+        # recording is always written and the receiver's UDP port released.
+        if receiver is not None:
+            stop_request.saving = True
             try:
-                retarget_input = None
-
-                if args.mode in ("live", "replay") and last_frame_bones is not None:
-                    retarget_input = retargeter.process_mocap_frame(last_frame_bones)
-                elif args.mode == "bvh" and bvh_retarget_frames is not None:
-                    retarget_input = bvh_retarget_frames[bvh_frame_idx]
-
-                if retarget_input is not None:
-                    required = retargeter.get_required_bones()
-                    filtered = {k: v for k, v in retarget_input.items() if k in required}
-
-                    qpos = retargeter.retarget(filtered)
-
-                    robot_root_pos = qpos[:3].copy()
-                    robot_root_quat = qpos[3:7].copy()
-                    robot_joints = qpos[7:].copy()
-
-                    if args.robot_view == "side_by_side":
-                        robot_root_pos[0] += args.robot_offset
-                    last_robot_root_pos = robot_root_pos
-
-                    if robot_reorder_map is not None and robot_dof_reordered is not None:
-                        robot_dof_reordered[:] = 0.0
-                        n_joints = min(len(robot_joints), len(robot_reorder_map))
-                        for mj_i in range(n_joints):
-                            robot_dof_reordered[robot_reorder_map[mj_i]] = robot_joints[mj_i]
-                        robot_joints_ordered = robot_dof_reordered
-                    else:
-                        robot_joints_ordered = robot_joints
-
-                    robot_root_pose_t[0, :3] = torch.from_numpy(robot_root_pos).float()
-                    robot_root_pose_t[0, 3:] = torch.from_numpy(robot_root_quat).float()
-                    n_write = min(len(robot_joints_ordered), robot_num_dofs)
-                    robot_dof_pos_t[0, :n_write] = torch.from_numpy(
-                        robot_joints_ordered[:n_write].astype(np.float32)
-                    )
-
-                    robot_articulation.write_root_link_pose_to_sim(
-                        robot_root_pose_t, robot_env_ids
-                    )
-                    robot_articulation.write_root_link_velocity_to_sim(
-                        robot_root_vel, robot_env_ids
-                    )
-                    robot_articulation.write_joint_state_to_sim(
-                        robot_dof_pos_t, robot_dof_vel_t, env_ids=robot_env_ids
-                    )
-
-                    if args.debug and frame_count % max(1, int(control_fps * 2)) == 0:
-                        ik_err = retargeter._error1()
-                        print(f"[ROBOT DEBUG] IK error: {ik_err:.4f} | "
-                              f"Root: [{robot_root_pos[0]:.3f}, {robot_root_pos[1]:.3f}, {robot_root_pos[2]:.3f}]")
-
-            except Exception as exc:
-                if args.debug:
-                    print(f"[WARN] Retarget error: {exc}")
-
-        # ---- Mesh overlay update ----
-        if mesh_enabled and mesh_model is not None and mesh_overlay is not None:
-            vertices = None
-            if last_mesh_bones is not None:
-                # pose_from_bones refits only when the streamed offsets change.
-                try:
-                    vertices = mesh_model.pose_from_bones(
-                        last_mesh_bones, forward_mode=args.forward_mode, fit=mesh_fit
-                    )
-                except ValueError as exc:
-                    print(f"[WARN] Mesh refit failed, keeping the current proportions: {exc}")
-                    mesh_fit = False
-                    vertices = mesh_model.pose_from_bones(
-                        last_mesh_bones, forward_mode=args.forward_mode, fit=False
-                    )
-            elif last_mesh_local_quats_yup is not None and last_mesh_root_pos_yup is not None:
-                vertices = mesh_model.pose_vertices(
-                    last_mesh_local_quats_yup,
-                    last_mesh_root_pos_yup,
-                    forward_mode=args.forward_mode,
-                )
-            if vertices is not None:
-                mesh_overlay.update_vertices(vertices)
-                mesh_overlay.set_visible(mesh_user_visible)
-
-        # ---- Step + render ----
-        sim.step()
-        if articulation is not None:
-            articulation.update(sim.get_physics_dt())
-        if robot_articulation is not None:
-            robot_articulation.update(sim.get_physics_dt())
-
-        # ---- Camera tracking ----
-        if camera is not None:
-            if robot_enabled and args.robot_view == "robot_only":
-                camera.update(last_robot_root_pos)
-            else:
-                camera.update(last_root_pos)
-
-        # ---- One-step mode: advance one BVH frame then pause ----
-        if play_mode == PlayMode.ONE_STEP:
-            play_mode = PlayMode.PAUSE
-
-        # ---- Max frames limit (headless testing) ----
-        total_steps += 1
-        if args.max_frames is not None and total_steps >= args.max_frames:
-            print(f"[INFO] Reached --max_frames ({args.max_frames}), exiting main loop")
-            break
-
-        # ---- FPS tracking ----
-        frame_count += 1
-        if args.debug:
-            now = time.time()
-            if now - last_fps_time >= 2.0:
-                fps = frame_count / (now - last_fps_time)
-                info = f"[DEBUG] Render FPS: {fps:.1f} (target: {control_fps:.0f})"
-                if args.mode == "bvh":
-                    info += f" | BVH frame: {bvh_frame_idx}/{num_frames}"
-                if args.mode in ("live", "replay") and receiver:
-                    info += f" | Recv rate: {receiver.get_receive_rate():.1f} Hz"
-                print(info)
-                frame_count = 0
-                last_fps_time = now
-
-    # ---- Cleanup ----
-    if receiver is not None:
-        if hasattr(receiver, 'recorder') and receiver.recorder is not None:
-            receiver.recorder.save()
-        receiver.stop()
+                if getattr(receiver, "recorder", None) is not None:
+                    receiver.recorder.save()
+                receiver.stop()
+            finally:
+                stop_request.saving = False
     close_app(sim)
 
 
