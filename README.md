@@ -73,6 +73,7 @@ MOVIN-Isaac-Plugin/
   examples/
     mocap_to_isaaclab.py         # MOVIN -> Isaac Lab visualization
     bvh_utils.py                 # BVH loader + BVH->Isaac/retarget conversion (plugin-owned)
+    skeleton_assets.py           # Skeleton MJCF selection (reference / actor-fitted) + USD cache layout
   scripts/
     generate_skeleton_mjcf.py    # Generate a skeleton MJCF from a T-pose BVH
     extract_movinman_mesh.py     # Extract mesh + skin weights from a MOVIN FBX into an NPZ (runs in Blender)
@@ -83,11 +84,15 @@ MOVIN-Isaac-Plugin/
     test_skeleton_assets.py      # Checks the V3 MJCF against its T-pose and the SDK preset
     test_mesh_assets.py          # Checks the V3 mesh NPZ against the SDK LBS path and the T-pose
     test_fake_studio_stream.py   # Checks the fake MOVIN Studio stream against the BVH path
+    test_packaged_assets.py      # Checks the SDK's packaged assets against the generator and data/
+    test_fitting.py              # Checks body-proportion fitting, BVH sizing and the USD cache layout
   data/
     movinman_skeleton.xml        # MOVINMan MJCF skeleton (51 bones, legacy preset)
     movinman_v3_skeleton.xml     # MOVINManV3 MJCF skeleton (54 joints, generated)
     movinman_mesh.npz            # Pre-extracted mesh for LBS overlay (legacy preset)
     movinman_v3_mesh.npz         # Pre-extracted mesh for LBS overlay (movinman_v3 preset)
+                                 # (the four files above are generator outputs; at runtime the
+                                 #  identical copies packaged with MOVIN-SDK-Python are used)
     MOVINMan_dump.xml            # MOVINMan FBX dump
     MOVINman_V3_local_rotation_identity.fbx
                                  # MOVINManV3 rig with identity local rotations in the bind pose (skinned mesh)
@@ -96,6 +101,7 @@ MOVIN-Isaac-Plugin/
     Locomotion.bvh               # Sample BVH for testing
     test_V3.bvh                  # Sample MOVINManV3 BVH for testing
     ground/                      # Vendored Isaac grid ground plane (avoids the cloud asset fetch)
+    usd_output/                  # MJCF -> USD conversion cache (generated, git-ignored)
 ```
 
 ## Live Mocap from MOVIN Studio
@@ -120,6 +126,37 @@ python examples/mocap_to_isaaclab.py --mode live --port 11235 --headless
 
 No MOVIN Studio at hand? Stream a BVH file in its place with
 `scripts/fake_movin_studio.py` (see [Testing without MOVIN Studio](#testing-without-movin-studio)).
+
+The receiver answers MOVIN Studio's OSC status probe, so Studio's Streaming panel shows **OSC connected**. Its *Viewer* fps is the rate at which the example consumes frames, i.e. its render loop rate.
+
+## Body Proportion Fitting
+
+The skeleton MJCF and the mesh ship with MOVIN-SDK-Python in the reference character's proportions. MOVIN Studio calibrates every actor and streams that actor's bone offsets, so by default the example fits both assets to the actor before building the scene:
+
+- **Skeleton**: the SDK's MJCF is fitted with `fit_skeleton_mjcf()` (body offsets from the actor, root height adjusted so the T-pose stands on the ground, capsules resized) and converted to USD.
+- **Mesh**: the SDK's mesh is fitted with `MOVINMeshModel.fit_to_bones()`; in live and replay mode it is posed with `pose_from_bones()`, which refits whenever the streamed offsets change.
+
+The proportions come from:
+
+| Mode | Source |
+|------|--------|
+| `live` | the first streamed frame (the example waits for it before building the scene) |
+| `replay` | the recording's first frame |
+| `bvh` | the BVH file's `OFFSET`s (MOVIN Studio's BVH exports carry the actor's calibration too) |
+
+Fitting is **on by default**. Pass `--no_fit` to use the SDK's reference assets (`preset.mjcf_path`, `preset.mesh_npz_path`) as they are:
+
+```bash
+python examples/mocap_to_isaaclab.py --mode live --port 11235 \
+    --view_mode mesh_skeleton --no_fit
+```
+
+Notes:
+
+- Live mode always waits for the first frame while fitting is on; only `--preset <name> --no_fit` starts without one.
+- The USD conversions are cached in `data/usd_output/skeletons/`, one directory per MJCF content: `<preset>_skeleton_fitted_<hash>/` for each fitted actor (holding the fitted MJCF as well) and `<preset>_skeleton_reference_<hash>/` for `--no_fit`. A new actor gets its own conversion, a returning actor reuses it, and nothing is written into the SDK package. The directory can be deleted at any time; it is rebuilt on demand.
+- If the actor is recalibrated or switched while the example runs, the mesh refits automatically, but the skeleton articulation keeps the proportions it was built with; the example prints a warning, and a restart refits it.
+- If the stream's hierarchy does not match the preset (for example `--preset movinman` on a MOVINManV3 stream), the example prints a warning and uses the reference proportions.
 
 ## Recording & Replay
 
@@ -201,7 +238,18 @@ python examples/mocap_to_isaaclab.py --mode live --port 11235 \
 # Debug mode (print IK error)
 python examples/mocap_to_isaaclab.py --mode live --port 11235 \
     --robot unitree_g1 --debug
+
+# Size the robot targets for a 1.70 m actor instead of measuring the stream
+python examples/mocap_to_isaaclab.py --mode live --port 11235 \
+    --robot unitree_g1 --human_height 1.70
 ```
+
+`--human_height auto|<actor height (m)>` sets how the actor is normalized to the reference body the retargeting tables were tuned for:
+
+- `auto` (default): measured from the actor's bones by the SDK Retargeter (in live and replay mode from the stream, recomputed if the actor is recalibrated; in BVH mode once from the file's `OFFSET`s).
+- a number: the actor's standing height in meters.
+
+Earlier versions of the plugin passed a number with a different meaning (default `1.75`); to reproduce a result obtained with an old value `h`, pass `3.24 / h` (the old default corresponds to about `1.85`).
 
 ### Supported Robots
 
@@ -221,11 +269,13 @@ By default (`--preset auto`) the preset is detected automatically, per mode:
 
 - **bvh**: detected from the joint names in the BVH file
 - **replay**: detected by peeking at the recording's first frame
-- **live**: waits for the first mocap frame before starting (pass `--preset movinman` or `--preset movinman_v3` explicitly to skip the wait)
+- **live**: waits for the first mocap frame before starting (it waits for it anyway while [fitting](#body-proportion-fitting) is on; pass `--preset movinman` or `--preset movinman_v3` together with `--no_fit` to skip the wait)
 
 Pass `--preset movinman` or `--preset movinman_v3` to force a specific preset instead of auto-detecting.
 
-Mesh overlay (`--view_mode mesh` / `mesh_skeleton`) is available for both presets: `movinman` uses `data/movinman_mesh.npz` and `movinman_v3` uses `data/movinman_v3_mesh.npz`. Pass `--mesh_npz` to use another asset. A preset without a mesh asset prints a warning and falls back to skeleton-only rendering.
+The skeleton MJCF and mesh of each preset are the assets packaged with MOVIN-SDK-Python (`movin_sdk_python/movin_sdk_python/assets/`, resolved through `SkeletonPreset.mjcf_path` and `mesh_npz_path`). The files in `data/` are the outputs of this repo's generators, kept byte-identical to the packaged copies; after regenerating an asset, copy it into the SDK's `movin_sdk_python/assets/` (`tests/test_packaged_assets.py` fails while they differ).
+
+Mesh overlay (`--view_mode mesh` / `mesh_skeleton`) is available for both presets: `movinman` uses the SDK's `movinman_mesh.npz` and `movinman_v3` its `movinman_v3_mesh.npz`. Pass `--mesh_npz` to use another asset with the preset's bone layout (it is fitted like the packaged one). A preset without a mesh asset prints a warning and falls back to skeleton-only rendering.
 
 `data/movinman_v3_mesh.npz` is extracted from the skinned mesh of `data/MOVINman_V3_local_rotation_identity.fbx` (44,402 vertices, 4 influences per vertex) with Blender's bundled FBX importer; the script checks that every joint's rest rotation is identity, which is what makes the NPZ's translation-only bind frames valid:
 
@@ -245,7 +295,7 @@ python scripts/generate_skeleton_mjcf.py \
     data/movinman_v3_skeleton.xml --model-name movinman_v3
 ```
 
-`python -m unittest discover -s tests` checks that the committed MJCF is exactly this command's output and that its body order and offsets match the SDK preset and the T-pose.
+`python -m unittest discover -s tests` checks that the committed MJCF and the SDK's packaged copy are exactly this command's output and that its body order and offsets match the SDK preset and the T-pose.
 
 ## Options
 
@@ -261,10 +311,11 @@ python scripts/generate_skeleton_mjcf.py \
 | `--record` | `<path>` | Record live session to `.pkl` file |
 | `--recording` | `<path>` | Replay from recorded `.pkl` file |
 | `--robot` | `unitree_g1`, `unitree_g1_with_hands` | Enable robot retargeting |
-| `--human_height` | float (default: 1.75) | Human height for retargeting scaling |
+| `--human_height` | `auto` or meters (default: `auto`) | Actor size for retargeting: `auto` measures it from the bones, a number is the actor's height |
 | `--robot_view` | `side_by_side`, `robot_only`, `overlay` | Robot display mode |
 | `--robot_offset` | float (default: 1.0) | X offset for side-by-side view |
-| `--mesh_npz` | `<path>` | Mesh NPZ for the overlay (default: the preset's asset in `data/`) |
+| `--mesh_npz` | `<path>` | Mesh NPZ for the overlay (default: the preset's mesh packaged with the SDK) |
+| `--no_fit` | | Use the SDK's reference-proportion skeleton and mesh as-is (default: fit them to the actor) |
 | `--headless` | | No GUI window |
 | `--debug` | | Print FPS and debug info |
 | `--max_frames` | int | Exit the main loop after N frames (mainly for headless testing) |

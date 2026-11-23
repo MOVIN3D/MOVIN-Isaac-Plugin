@@ -4,7 +4,9 @@ MOVIN Mocap to Isaac Lab Visualization.
 Receives real-time mocap data from MOVIN Studio (or plays back a BVH file)
 and drives a humanoid skeleton in Isaac Lab.  Optionally renders a high-fidelity
 surface mesh overlay via Linear Blend Skinning from the character mesh of the
-detected preset (data/movinman_mesh.npz or data/movinman_v3_mesh.npz).
+detected preset.  The skeleton MJCF and the mesh are the assets packaged with
+MOVIN-SDK-Python, fitted to the actor's body proportions (the streamed bone
+offsets, or the BVH's OFFSETs) unless --no_fit is given.
 
 Usage:
     # BVH playback (body-only)
@@ -28,6 +30,9 @@ Usage:
 
     # Live mocap with mesh overlay and Isaac world-forward (+X) facing
     python examples/mocap_to_isaaclab.py --mode live --port 11235 --view_mode mesh_skeleton --forward_mode isaac_world
+
+    # Reference proportions (no fitting to the actor)
+    python examples/mocap_to_isaaclab.py --mode live --port 11235 --view_mode mesh_skeleton --no_fit
 
     # Headless mode
     python examples/mocap_to_isaaclab.py --mode bvh --bvh_file examples/Locomotion.bvh --headless
@@ -66,12 +71,30 @@ parser.add_argument("--view_mode", type=str, default="skeleton",
                     choices=["skeleton", "mesh", "mesh_skeleton"],
                     help="Visualization mode: skeleton only, mesh only, or both")
 parser.add_argument("--mesh_npz", type=str, default=None,
-                    help="Mesh NPZ for the overlay (default: the detected preset's asset in data/)")
+                    help="Mesh NPZ for the overlay (default: the detected preset's mesh packaged "
+                         "with MOVIN-SDK-Python)")
+parser.add_argument("--no_fit", action="store_true",
+                    help="Use the reference body proportions of the SDK's packaged skeleton and mesh "
+                         "as-is instead of fitting them to the actor's streamed (or BVH) bone offsets")
 parser.add_argument("--robot", type=str, default=None,
                     choices=["unitree_g1", "unitree_g1_with_hands"],
                     help="Enable robot retargeting with the specified robot type")
-parser.add_argument("--human_height", type=float, default=1.75,
-                    help="Human height in meters for robot retargeting scaling (default: 1.75)")
+def _human_height_arg(value):
+    """'auto' or a positive height in meters (passed to the SDK Retargeter as-is)."""
+    if value == "auto":
+        return value
+    try:
+        height = float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected 'auto' or a height in meters, got {value!r}")
+    if not height > 0:
+        raise argparse.ArgumentTypeError(f"height must be positive, got {value!r}")
+    return height
+
+
+parser.add_argument("--human_height", type=_human_height_arg, default="auto",
+                    help="Actor size for robot retargeting: 'auto' (default) measures it from the "
+                         "streamed bones (BVH: its OFFSETs), or the actor's height in meters")
 parser.add_argument("--robot_view", type=str, default="side_by_side",
                     choices=["side_by_side", "robot_only", "overlay"],
                     help="Robot display mode: side_by_side, robot_only, or overlay")
@@ -143,10 +166,7 @@ from movin_sdk_python.utils.isaac_lab_utils import (
     SKELETON_JOINT_BONES,
     DEFAULT_HIPS_HEIGHT,
 )
-from movin_sdk_python.utils.movinman_mesh_utils import (
-    MOVINMeshModel,
-    extract_movin_local_quats_yup,
-)
+from movin_sdk_python.utils.movinman_mesh_utils import MOVINMeshModel
 from movin_sdk_python.utils.skeleton_presets import (
     get_preset,
     detect_preset_from_bone_names,
@@ -156,9 +176,11 @@ from movin_sdk_python.utils.skeleton_presets import (
 from bvh_utils import (
     read_bvh,
     load_bvh_file,
+    bvh_rest_bones,
     process_bvh_frame_for_isaaclab,
     extract_bvh_local_quats_yup,
 )
+from skeleton_assets import prepare_skeleton_asset, proportions_key
 
 CHARACTER_ROOT_PATH = "/World/envs/env_0/character"
 ROBOT_ROOT_PATH = "/World/envs/env_0/robot"
@@ -343,11 +365,18 @@ def build_lights():
     dome_light_cfg.func("/World/Light/dome_light", dome_light_cfg)
 
 
-def convert_mjcf_to_usd(mjcf_path):
-    """Convert MJCF XML to USD using Isaac Lab's converter."""
+def convert_mjcf_to_usd(mjcf_path, usd_dir=None, usd_filename=None):
+    """Convert MJCF XML to USD using Isaac Lab's converter.
+
+    The USD is cached at ``usd_dir/usd_filename`` (default: ``usd_output/``
+    next to the MJCF, named after it) and rebuilt when missing or older than
+    the MJCF.
+    """
     mjcf_path = os.path.abspath(mjcf_path)
-    usd_dir = os.path.join(os.path.dirname(mjcf_path), "usd_output")
-    usd_filename = os.path.splitext(os.path.basename(mjcf_path))[0] + ".usd"
+    if usd_dir is None:
+        usd_dir = os.path.join(os.path.dirname(mjcf_path), "usd_output")
+    if usd_filename is None:
+        usd_filename = os.path.splitext(os.path.basename(mjcf_path))[0] + ".usd"
     usd_path = os.path.join(usd_dir, usd_filename)
     needs_rebuild = (
         not os.path.exists(usd_path)
@@ -531,9 +560,16 @@ def main():
     # Live: start the receiver here so it is already streaming while the scene
     #   builds; it is reused for the main loop.  bvh: read the file once and
     #   reuse bvh_data.  replay: peek the recording's first frame.
+    # The same first frame (or the BVH's OFFSETs) carries the actor's body
+    # proportions, which the skeleton and mesh are fitted to unless --no_fit.
     receiver = None
     bvh_data = None
+    bvh_scale = 1.0
     explicit_preset = args.preset != "auto"
+    # Nothing to fit when the MOVIN character is not shown (robot_only).
+    fit_enabled = not args.no_fit and not skip_movin_character
+    fit_bones = None   # bones whose offsets carry the actor's proportions
+    fit_source = None  # where they came from (for the log)
 
     if args.mode == "live":
         from movin_sdk_python.mocap_receiver.mocap_receiver import MocapReceiver
@@ -543,11 +579,16 @@ def main():
         receiver.start()
         print(f"[INFO] Live mocap receiver started on port {args.port}")
 
-        if explicit_preset:
-            preset = get_preset(args.preset)
-        else:
-            print("[INFO] Waiting for mocap stream to detect skeleton preset... (pass --preset to skip)")
-            first_frame = None
+        first_frame = None
+        if fit_enabled or not explicit_preset:
+            purposes = []
+            if not explicit_preset:
+                purposes.append("detect the skeleton preset")
+            if fit_enabled:
+                purposes.append("fit the actor's body proportions")
+            skip_hint = "--preset with --no_fit" if fit_enabled else "--preset"
+            print(f"[INFO] Waiting for the first mocap frame to {' and '.join(purposes)}... "
+                  f"(pass {skip_hint} to skip)")
             while first_frame is None and simulation_app.is_running():
                 # Pump the Kit app so the window stays responsive and
                 # is_running() reflects a window close while we wait.
@@ -555,13 +596,19 @@ def main():
                 first_frame = receiver.get_latest_frame()
                 if first_frame is None:
                     time.sleep(0.05)
-            if first_frame is None:
-                print("[WARN] No mocap frame received; falling back to movinman")
-                preset = MOVINMAN_PRESET
-            else:
-                preset = detect_preset_from_bone_names(
-                    [b["bone_name"] for b in first_frame["bones"]]
-                )
+
+        if explicit_preset:
+            preset = get_preset(args.preset)
+        elif first_frame is None:
+            print("[WARN] No mocap frame received; falling back to movinman")
+            preset = MOVINMAN_PRESET
+        else:
+            preset = detect_preset_from_bone_names(
+                [b["bone_name"] for b in first_frame["bones"]]
+            )
+        if fit_enabled and first_frame is not None:
+            fit_bones = first_frame["bones"]
+            fit_source = "the first streamed frame"
 
     elif args.mode == "replay":
         if not args.recording:
@@ -572,22 +619,28 @@ def main():
             print(f"ERROR: Recording file not found: {args.recording}")
             simulation_app.close()
             return
-        if explicit_preset:
-            preset = get_preset(args.preset)
-        else:
+        first_frame = None
+        if fit_enabled or not explicit_preset:
             from movin_sdk_python.recording import peek_first_frame
             try:
                 first_frame = peek_first_frame(args.recording)
             except Exception as exc:
                 print(f"[WARN] Failed to peek recording ({exc})")
-                first_frame = None
             if first_frame is None:
-                print("[WARN] Could not peek recording for preset detection; falling back to movinman")
-                preset = MOVINMAN_PRESET
-            else:
-                preset = detect_preset_from_bone_names(
-                    [b["bone_name"] for b in first_frame["bones"]]
-                )
+                print("[WARN] Could not read a frame from the recording")
+
+        if explicit_preset:
+            preset = get_preset(args.preset)
+        elif first_frame is None:
+            print("[WARN] Falling back to the movinman preset")
+            preset = MOVINMAN_PRESET
+        else:
+            preset = detect_preset_from_bone_names(
+                [b["bone_name"] for b in first_frame["bones"]]
+            )
+        if fit_enabled and first_frame is not None:
+            fit_bones = first_frame["bones"]
+            fit_source = "the recording's first frame"
 
     elif args.mode == "bvh":
         bvh_file = args.bvh_file
@@ -596,6 +649,7 @@ def main():
             simulation_app.close()
             return
         bvh_data = read_bvh(bvh_file)
+        bvh_scale = args.bvh_scale if args.bvh_scale is not None else detect_bvh_scale(bvh_data)
         detected = detect_preset_from_bone_names(bvh_data.bones)
         if explicit_preset:
             preset = get_preset(args.preset)
@@ -604,8 +658,20 @@ def main():
                       f"{detected.name}; using {preset.name}")
         else:
             preset = detected
+        if fit_enabled:
+            # MOVIN Studio's BVH exports carry the actor's bone lengths in OFFSET.
+            fit_bones = bvh_rest_bones(bvh_data, bvh_scale)
+            fit_source = "the BVH OFFSETs"
 
     print(f"[INFO] Skeleton preset: {preset.name}")
+    if skip_movin_character:
+        pass
+    elif not fit_enabled:
+        print("[INFO] Body proportions: reference (--no_fit)")
+    elif fit_bones is None:
+        print("[WARN] Body proportions: no frame to fit to; using the reference proportions")
+    else:
+        print(f"[INFO] Body proportions: fitting to {fit_source} (--no_fit for the reference)")
 
     # ---- Mesh availability for this preset ----
     if mesh_enabled and preset.mesh_npz_filename is None and args.mesh_npz is None:
@@ -641,10 +707,27 @@ def main():
 
     # ---- Character (skeleton articulation) ----
     articulation = None
+    skeleton_fitted = False
     if not mesh_only and not skip_movin_character:
-        mjcf_path = os.path.join(PROJECT_ROOT, "data", preset.mjcf_filename)
-        print(f"[INFO] Converting MJCF: {mjcf_path}")
-        usd_path = convert_mjcf_to_usd(mjcf_path)
+        # The SDK's packaged MJCF, or that MJCF fitted to the actor; either way
+        # the USD is cached per MJCF content (see skeleton_assets.py), so a new
+        # actor gets a new conversion and the SDK's files are never written.
+        skeleton_asset = None
+        if fit_bones is not None:
+            try:
+                skeleton_asset = prepare_skeleton_asset(preset, fit_bones)
+            except ValueError as exc:
+                print(f"[WARN] Skeleton not fitted, using the reference proportions: {exc}")
+        if skeleton_asset is None:
+            skeleton_asset = prepare_skeleton_asset(preset)
+        skeleton_fitted = skeleton_asset.fitted
+        kind = f"fitted to {fit_source}" if skeleton_fitted else "reference proportions"
+        print(f"[INFO] Skeleton MJCF ({kind}): {skeleton_asset.mjcf_path}")
+        usd_path = convert_mjcf_to_usd(
+            skeleton_asset.mjcf_path,
+            usd_dir=skeleton_asset.usd_dir,
+            usd_filename=skeleton_asset.usd_file_name,
+        )
         print(f"[INFO] USD path: {usd_path}")
         articulation = create_articulation(
             usd_path, start_pos=(0.0, 0.0, preset.default_hips_height)
@@ -657,7 +740,7 @@ def main():
     if robot_enabled:
         from movin_sdk_python.retargeter.retargeter import Retargeter, ROBOT_XML_DICT
 
-        print(f"[INFO] Initializing robot retargeter: {args.robot}")
+        print(f"[INFO] Initializing robot retargeter: {args.robot} (human_height={args.human_height})")
         retargeter = Retargeter(
             robot_type=args.robot,
             human_height=args.human_height,
@@ -698,16 +781,34 @@ def main():
     # ---- Mesh overlay setup ----
     mesh_model = None
     mesh_overlay = None
+    mesh_fit = False  # live/replay: refit whenever the streamed proportions change
     if mesh_enabled:
-        mesh_npz = args.mesh_npz
-        if mesh_npz is None:
-            mesh_npz = os.path.join(PROJECT_ROOT, "data", preset.mesh_npz_filename)
-        mesh_model = MOVINMeshModel(npz_path=mesh_npz, expected_bone_names=preset.body_names)
+        if args.mesh_npz is not None:
+            mesh_model = MOVINMeshModel(npz_path=args.mesh_npz, expected_bone_names=preset.body_names)
+        else:
+            mesh_model = MOVINMeshModel.from_preset(preset)
+        if fit_bones is not None:
+            try:
+                mesh_model.fit_to_bones(fit_bones)
+                mesh_fit = mesh_model.is_fitted
+            except ValueError as exc:
+                mesh_model.reset_fit()
+                print(f"[WARN] Mesh not fitted, using the reference proportions: {exc}")
         mesh_overlay = MeshOverlay(mesh_model, prim_path=MESH_PRIM_PATH)
+        kind = (f"fitted to {fit_source} ({len(mesh_model.fitted_bones)} bones)"
+                if mesh_fit else "reference proportions")
         print(
             f"[INFO] Mesh overlay initialized: "
-            f"{mesh_model.num_vertices} verts, {mesh_model.faces.shape[0]} faces"
+            f"{mesh_model.num_vertices} verts, {mesh_model.faces.shape[0]} faces, {kind}"
         )
+
+    # Live/replay: warn when the streamed proportions drift from the fitted ones
+    # (actor recalibrated or switched mid-session).  The mesh refits itself; the
+    # skeleton articulation cannot be rebuilt while the simulation runs.
+    fitted_proportions = None
+    if args.mode in ("live", "replay") and (skeleton_fitted or mesh_fit):
+        fitted_proportions = proportions_key(fit_bones, preset.body_names)
+    seen_proportions = fitted_proportions
 
     if articulation is not None:
         set_prim_visibility(CHARACTER_ROOT_PATH, skeleton_visible)
@@ -838,10 +939,10 @@ def main():
         camera = CameraTracker(sim, pos=[0.0, -5.0, 3.0], target=[0.0, 0.0, 1.0])
 
     # ---- Data source setup ----
-    # The live receiver and bvh_data were created during preset resolution;
-    # reuse them.  The replay receiver is created here (peek handled detection).
+    # The live receiver, bvh_data and bvh_scale were set up during preset
+    # resolution; reuse them.  The replay receiver is created here (peek
+    # handled detection).
     bvh_frame_idx = 0
-    bvh_scale = 1.0
     bvh_retarget_frames = None
 
     if args.mode == "live":
@@ -860,11 +961,6 @@ def main():
         print(f"[INFO] Replay receiver started from {args.recording}")
 
     elif args.mode == "bvh":
-        if args.bvh_scale is not None:
-            bvh_scale = args.bvh_scale
-        else:
-            bvh_scale = detect_bvh_scale(bvh_data)
-
         num_frames = bvh_data.quats.shape[0]
         print(f"[INFO] Loaded BVH: {args.bvh_file}")
         print(f"[INFO]   Bones: {len(bvh_data.bones)}, Frames: {num_frames}, FPS: {control_fps:.1f}")
@@ -873,12 +969,21 @@ def main():
         if robot_enabled and retargeter is not None:
             bvh_retarget_frames, _, _, _ = load_bvh_file(args.bvh_file, human_height=args.human_height)
             print(f"[INFO] Precomputed {len(bvh_retarget_frames)} BVH retarget frames")
+            if args.human_height == "auto":
+                # The precomputed frames go straight to retarget(), bypassing
+                # process_mocap_frame(), which is where "auto" measures the
+                # actor.  Measure it once from the BVH's rest offsets, in the
+                # file's units like the precomputed frames.
+                retargeter.process_mocap_frame(bvh_rest_bones(bvh_data))
+                print(f"[INFO] Robot targets sized from the BVH OFFSETs "
+                      f"(body scale {retargeter.body_scale:.3f})")
 
     # ---- Persistent state for kinematic driving ----
     last_root_pos = np.array([0.0, 0.0, preset.default_hips_height])
     last_root_quat = np.array([1.0, 0.0, 0.0, 0.0])
     last_dof_values = np.zeros(num_dofs)
-    last_mesh_local_quats_yup = None
+    last_mesh_bones = None             # live/replay mesh source
+    last_mesh_local_quats_yup = None   # bvh mesh source
     last_mesh_root_pos_yup = None
     last_robot_root_pos = np.array([0.0, 0.0, 0.8])
     last_frame_bones = None
@@ -930,14 +1035,29 @@ def main():
                     last_dof_values = dof_values
 
                 if mesh_enabled:
-                    mesh_quats, mesh_root = extract_movin_local_quats_yup(
-                        frame["bones"], skeleton_body_names=preset.body_names
-                    )
-                    last_mesh_local_quats_yup = mesh_quats
-                    last_mesh_root_pos_yup = mesh_root
+                    last_mesh_bones = frame["bones"]
                     if mesh_only:
-                        from movin_sdk_python.utils.isaac_lab_utils import yup_to_zup_vec
-                        last_root_pos = yup_to_zup_vec(mesh_root)
+                        # Root only (no joints), with the forward mode applied,
+                        # for the camera to follow.
+                        last_root_pos, _, _ = process_movin_bones_for_isaaclab(
+                            frame["bones"],
+                            skeleton_bone_names=(),
+                            forward_mode=args.forward_mode,
+                        )
+
+                if fitted_proportions is not None:
+                    key = proportions_key(frame["bones"], preset.body_names)
+                    if key != seen_proportions:
+                        seen_proportions = key
+                        if key != fitted_proportions:
+                            notes = []
+                            if skeleton_fitted:
+                                notes.append("the skeleton keeps the proportions it was "
+                                             "fitted to at startup (restart to refit it)")
+                            if mesh_fit:
+                                notes.append("the mesh refits automatically")
+                            print("[WARN] The streamed body proportions changed (actor "
+                                  "recalibrated or switched): " + "; ".join(notes))
 
                 last_frame_bones = frame["bones"]
                 has_first_frame = True
@@ -976,8 +1096,13 @@ def main():
                 last_mesh_local_quats_yup = mesh_quats
                 last_mesh_root_pos_yup = mesh_root * bvh_scale
                 if mesh_only:
-                    from movin_sdk_python.utils.isaac_lab_utils import yup_to_zup_vec
-                    last_root_pos = yup_to_zup_vec(mesh_root * bvh_scale)
+                    # Root only, with the forward mode applied, for the camera.
+                    root_pos, _, _ = process_bvh_frame_for_isaaclab(
+                        frame_quats, frame_pos, bvh_data.bones,
+                        skeleton_bone_names=(),
+                        forward_mode=args.forward_mode,
+                    )
+                    last_root_pos = root_pos * bvh_scale
 
             has_first_frame = True
 
@@ -1059,20 +1184,29 @@ def main():
                     print(f"[WARN] Retarget error: {exc}")
 
         # ---- Mesh overlay update ----
-        if (
-            mesh_enabled
-            and mesh_model is not None
-            and mesh_overlay is not None
-            and last_mesh_local_quats_yup is not None
-            and last_mesh_root_pos_yup is not None
-        ):
-            vertices = mesh_model.pose_vertices(
-                last_mesh_local_quats_yup,
-                last_mesh_root_pos_yup,
-                forward_mode=args.forward_mode,
-            )
-            mesh_overlay.update_vertices(vertices)
-            mesh_overlay.set_visible(mesh_user_visible)
+        if mesh_enabled and mesh_model is not None and mesh_overlay is not None:
+            vertices = None
+            if last_mesh_bones is not None:
+                # pose_from_bones refits only when the streamed offsets change.
+                try:
+                    vertices = mesh_model.pose_from_bones(
+                        last_mesh_bones, forward_mode=args.forward_mode, fit=mesh_fit
+                    )
+                except ValueError as exc:
+                    print(f"[WARN] Mesh refit failed, keeping the current proportions: {exc}")
+                    mesh_fit = False
+                    vertices = mesh_model.pose_from_bones(
+                        last_mesh_bones, forward_mode=args.forward_mode, fit=False
+                    )
+            elif last_mesh_local_quats_yup is not None and last_mesh_root_pos_yup is not None:
+                vertices = mesh_model.pose_vertices(
+                    last_mesh_local_quats_yup,
+                    last_mesh_root_pos_yup,
+                    forward_mode=args.forward_mode,
+                )
+            if vertices is not None:
+                mesh_overlay.update_vertices(vertices)
+                mesh_overlay.set_visible(mesh_user_visible)
 
         # ---- Step + render ----
         sim.step()

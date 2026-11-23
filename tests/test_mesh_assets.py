@@ -1,8 +1,10 @@
-"""Guards ``data/movinman_v3_mesh.npz`` against the SDK's LBS path and the T-pose.
+"""Guards the V3 mesh NPZ against the SDK's LBS path and the T-pose.
 
 The NPZ is extracted from ``data/MOVINman_V3_local_rotation_identity.fbx`` with
 ``scripts/extract_movinman_mesh.py`` (runs in Blender, so the extraction itself is
-not repeated here).
+not repeated here).  The copy checked is the one the example loads at runtime,
+packaged with the SDK (``MOVINMAN_V3_PRESET.mesh_npz_path``);
+``test_packaged_assets`` checks that ``data/`` still holds the same bytes.
 
 Run with:  python -m unittest discover -s tests
 """
@@ -29,12 +31,13 @@ class V3MeshAssetTests(unittest.TestCase):
         from movin_sdk_python.utils.skeleton_presets import MOVINMAN_V3_PRESET
 
         cls.preset = MOVINMAN_V3_PRESET
-        cls.npz_path = os.path.join(DATA, cls.preset.mesh_npz_filename or "")
+        cls.npz_path = cls.preset.mesh_npz_path
         cls.npz = np.load(cls.npz_path)
-        cls.model = MOVINMeshModel(cls.npz_path, expected_bone_names=cls.preset.body_names)
+        cls.model = MOVINMeshModel.from_preset(cls.preset)
 
     def test_preset_points_at_an_existing_asset(self):
         self.assertEqual(self.preset.mesh_npz_filename, "movinman_v3_mesh.npz")
+        self.assertEqual(os.path.basename(self.npz_path), "movinman_v3_mesh.npz")
         self.assertTrue(os.path.exists(self.npz_path))
 
     def test_mesh_is_triangulated_and_indexed_in_range(self):

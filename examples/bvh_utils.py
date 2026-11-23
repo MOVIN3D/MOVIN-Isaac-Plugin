@@ -6,6 +6,8 @@ recording") removed every BVH code path from the SDK (``utils/bvh_loader.py``,
 ``Retargeter.load_bvh`` and the euler->quat helpers in ``quat_utils``).
 The plugin's ``--mode bvh`` still needs them, so they live here now.  The code
 is the SDK's former implementation, unchanged apart from imports.
+``bvh_rest_bones`` is the plugin's own addition: it feeds a BVH's offsets to
+the SDK's body-proportion fitting.
 """
 
 import re
@@ -181,6 +183,37 @@ def read_bvh(filename, start=None, end=None, order=None):
     rotations = euler_to_quat(np.radians(rotations), order=order)
     rotations = remove_quat_discontinuities(rotations)
     return BVHAnimation(rotations, positions, offsets, parents, names)
+
+
+def bvh_rest_bones(data, scale=1.0):
+    """The BVH's rest skeleton as a streamed frame's ``bones`` list.
+
+    MOVIN Studio's BVH exports carry the actor's calibrated bone lengths in
+    their ``OFFSET``s, just as the live stream carries them in ``p``.  This
+    builds the bone dicts MocapReceiver delivers (``bone_index``,
+    ``parent_index``, ``bone_name``, ``p`` and identity rotations) so the SDK's
+    fitting API (``fit_skeleton_mjcf``, ``MOVINMeshModel.fit_to_bones``) can fit
+    the assets to a BVH the same way it fits them to a stream.
+
+    BVH offsets are right-handed Y-up while the stream's ``p`` is Unity
+    left-handed, so x is negated.  ``scale`` converts the file's units to
+    meters (see ``detect_bvh_scale``).  The root's offset is the BVH root
+    OFFSET (unused by fitting, which keeps the asset's own root).
+    """
+    identity = (1.0, 0.0, 0.0, 0.0)
+    bones = []
+    for i, (name, parent) in enumerate(zip(data.bones, data.parents)):
+        ox, oy, oz = (float(v) * scale for v in data.offsets[i])
+        bones.append({
+            "bone_index": i,
+            "parent_index": int(parent),
+            "bone_name": name,
+            "p": (-ox, oy, oz),
+            "q": identity,
+            "rq": identity,
+            "s": (1.0, 1.0, 1.0),
+        })
+    return bones
 
 
 def load_bvh_file(bvh_file, human_height=1.75):
