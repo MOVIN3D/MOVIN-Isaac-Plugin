@@ -103,7 +103,8 @@ MOVIN-Isaac-Plugin/
                                  # Its rest pose as a BVH (source of the V3 MJCF)
     Locomotion.bvh               # Sample BVH for testing
     test_V3.bvh                  # Sample MOVINManV3 BVH for testing
-    ground/                      # Vendored Isaac grid ground plane (avoids the cloud asset fetch)
+    ground/                      # Vendored Isaac grid ground plane (avoids the cloud asset fetch;
+                                 # NVIDIA asset, see THIRD_PARTY_NOTICES.md)
     usd_output/                  # MJCF -> USD conversion cache (generated, git-ignored)
 ```
 
@@ -391,4 +392,11 @@ the result of each scenario.
 
 ## License
 
-MIT
+Apache License 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE), the same license as
+MOVIN SDK Python.
+
+Third-party components keep their own licenses and are listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md): the MOVIN SDK Python submodule (Apache
+License 2.0), the NVIDIA Isaac Sim Grid environment in `data/ground/` (NVIDIA's license terms,
+not Apache), the Unitree G1 robot assets that ship with the SDK (Unitree's terms), and the GMR
+retargeting approach the SDK's `Retargeter` derives from.
