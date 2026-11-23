@@ -365,16 +365,21 @@ def build_lights():
     dome_light_cfg.func("/World/Light/dome_light", dome_light_cfg)
 
 
-def convert_mjcf_to_usd(mjcf_path, usd_dir=None, usd_filename=None):
+# Robot MJCF -> USD conversions, one directory per robot model.  The robot MJCFs
+# ship inside MOVIN-SDK-Python; their USD is generated here so nothing is
+# written into the SDK package.
+ROBOT_USD_CACHE = os.path.join(PROJECT_ROOT, "data", "usd_output", "robots")
+
+
+def convert_mjcf_to_usd(mjcf_path, usd_dir, usd_filename=None):
     """Convert MJCF XML to USD using Isaac Lab's converter.
 
-    The USD is cached at ``usd_dir/usd_filename`` (default: ``usd_output/``
-    next to the MJCF, named after it) and rebuilt when missing or older than
-    the MJCF.
+    The USD is cached at ``usd_dir/usd_filename`` (default file name: the
+    MJCF's, with ``.usd``) and rebuilt when missing or older than the MJCF.
+    ``usd_dir`` should hold a single conversion: the converter also writes its
+    ``configuration/`` sublayers and bookkeeping files there.
     """
     mjcf_path = os.path.abspath(mjcf_path)
-    if usd_dir is None:
-        usd_dir = os.path.join(os.path.dirname(mjcf_path), "usd_output")
     if usd_filename is None:
         usd_filename = os.path.splitext(os.path.basename(mjcf_path))[0] + ".usd"
     usd_path = os.path.join(usd_dir, usd_filename)
@@ -763,7 +768,10 @@ def main():
         from movin_sdk_python.utils.usd_utils import fix_mjcf_usd_materials
         robot_mjcf_path = str(ROBOT_XML_DICT[args.robot])
         print(f"[INFO] Converting robot MJCF: {robot_mjcf_path}")
-        robot_usd_path = convert_mjcf_to_usd(robot_mjcf_path)
+        robot_stem = os.path.splitext(os.path.basename(robot_mjcf_path))[0]
+        robot_usd_path = convert_mjcf_to_usd(
+            robot_mjcf_path, usd_dir=os.path.join(ROBOT_USD_CACHE, robot_stem)
+        )
         fix_mjcf_usd_materials(robot_mjcf_path, robot_usd_path)
         print(f"[INFO] Robot USD path: {robot_usd_path}")
 

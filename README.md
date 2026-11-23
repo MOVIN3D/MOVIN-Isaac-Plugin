@@ -252,6 +252,8 @@ Earlier versions of the plugin passed a number with a different meaning (default
 | `unitree_g1` | Unitree G1 (standard) | 29 |
 | `unitree_g1_with_hands` | Unitree G1 with hands | 43 |
 
+The robot MJCFs ship with MOVIN-SDK-Python. The example converts each to USD on first use and caches it in `data/usd_output/robots/<model>/` (rebuilt when the MJCF is newer), so nothing is written into the SDK package.
+
 ## Skeleton Presets
 
 Two MOVINMan skeleton layouts are supported:
