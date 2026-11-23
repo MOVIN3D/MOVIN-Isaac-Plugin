@@ -2,7 +2,8 @@
 Generate a MuJoCo MJCF skeleton from a MOVIN T-pose BVH file.
 
 Parses the hierarchy (joints + OFFSETs + End Sites) of a T-pose BVH and emits an
-MJCF whose structure and style mirror ``data/movinman_skeleton.xml``: the same
+MJCF whose structure and style mirror the legacy MOVINMan skeleton packaged with
+MOVIN-SDK-Python (``movinman_skeleton.xml``): the same
 ``<default>`` classes, one free joint at the root and three orthogonal hinges per
 non-root body, and per-body geoms mirrored (by name) from the legacy skeleton.
 
@@ -20,8 +21,8 @@ rest-pose removal.  (The older ``MOVINManV3_Tpose.bvh`` had world-aligned offset
 The zero pose of the generated MJCF is the identity-local-rotation pose, i.e. the
 V3 fingers point straight along the hand until the first frame arrives.
 
-Geoms are keyed by body NAME against a reference MJCF (default
-``data/movinman_skeleton.xml``): a body that exists in the reference reuses its
+Geoms are keyed by body NAME against a reference MJCF (default: the SDK's packaged
+``movinman_skeleton.xml``): a body that exists in the reference reuses its
 geom type/size/density, and capsule ``fromto`` endpoints are recomputed toward the
 body's primary child so the proxy matches the T-pose being generated.  Bodies that
 do not exist in the reference fall back to a template of a related body
@@ -33,7 +34,11 @@ Usage:
 Example:
     python scripts/generate_skeleton_mjcf.py \
         data/MOVINman_V3_local_rotation_identity_tpose.bvh \
-        data/movinman_v3_skeleton.xml --model-name movinman_v3
+        movinman_v3_skeleton.xml --model-name movinman_v3
+
+The runtime copy of the result ships with MOVIN-SDK-Python
+(``movin_sdk_python/assets/movinman_v3_skeleton.xml``); tests/test_skeleton_assets.py
+checks that it is exactly this script's output.
 """
 
 import argparse
@@ -44,10 +49,12 @@ import sys
 import xml.etree.ElementTree as ET
 
 
-# Default reference MJCF whose geom/gear styling is mirrored (plugin data dir).
-DEFAULT_REFERENCE_MJCF = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "data", "movinman_skeleton.xml"
-)
+# Default reference MJCF whose geom/gear styling is mirrored: the legacy MOVINMan
+# skeleton packaged with MOVIN-SDK-Python (the movin_sdk_python submodule).
+DEFAULT_REFERENCE_MJCF = os.path.normpath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..",
+    "movin_sdk_python", "movin_sdk_python", "assets", "movinman_skeleton.xml",
+))
 
 # Section comments emitted just before the named body opens (mirrors the legacy
 # file's hand-authored comments).  Bodies not listed here emit no comment; the

@@ -1,10 +1,13 @@
-"""Guards the generated MOVINManV3 skeleton against its sources.
+"""Guards the MOVINManV3 skeleton packaged with MOVIN-SDK-Python against its sources.
 
-``data/movinman_v3_skeleton.xml`` must be exactly what
+The example loads the MJCFs that ship with the SDK (``SkeletonPreset.mjcf_path``)
+while this repo keeps their sources and generator.  The SDK's
+``movinman_v3_skeleton.xml`` must be exactly what
 ``scripts/generate_skeleton_mjcf.py`` produces from
 ``data/MOVINman_V3_local_rotation_identity_tpose.bvh`` (the T-pose whose local
 rotations are all identity, i.e. parent-local offsets as streamed by MOVIN
-Studio), and the SDK's ``movinman_v3`` preset must describe that MJCF.
+Studio), using the SDK's legacy ``movinman_skeleton.xml`` as the style reference,
+and the SDK's ``movinman_v3`` preset must describe that MJCF.
 
 Run with:  python -m unittest discover -s tests
 """
@@ -20,11 +23,18 @@ for path in (ROOT, os.path.join(ROOT, "movin_sdk_python"), os.path.join(ROOT, "s
     if path not in sys.path:
         sys.path.insert(0, path)
 
+from movin_sdk_python.utils.skeleton_presets import (  # noqa: E402
+    MOVINMAN_PRESET,
+    MOVINMAN_V3_PRESET,
+    PRESETS,
+)
+
+SUBMODULE = os.path.join(ROOT, "movin_sdk_python")
 DATA = os.path.join(ROOT, "data")
 V3_TPOSE = os.path.join(DATA, "MOVINman_V3_local_rotation_identity_tpose.bvh")
-V3_MJCF = os.path.join(DATA, "movinman_v3_skeleton.xml")
+V3_MJCF = MOVINMAN_V3_PRESET.mjcf_path
 V3_ACTOR_BVH = os.path.join(DATA, "test_V3.bvh")
-LEGACY_MJCF = os.path.join(DATA, "movinman_skeleton.xml")
+LEGACY_MJCF = MOVINMAN_PRESET.mjcf_path
 
 
 def mjcf_bodies(path):
@@ -51,20 +61,22 @@ class V3SkeletonAssetTests(unittest.TestCase):
             actual = f.read()
         self.assertEqual(
             actual, expected,
-            "data/movinman_v3_skeleton.xml is stale: regenerate it with "
-            "scripts/generate_skeleton_mjcf.py from the local-rotation-identity T-pose",
+            "the SDK's movinman_v3_skeleton.xml is not the generator output: regenerate it "
+            "with scripts/generate_skeleton_mjcf.py from the local-rotation-identity T-pose "
+            "and update MOVIN-SDK-Python's movin_sdk_python/assets/",
+        )
+
+    def test_generator_defaults_to_the_packaged_legacy_reference(self):
+        self.assertEqual(
+            os.path.realpath(self.gen.DEFAULT_REFERENCE_MJCF), os.path.realpath(LEGACY_MJCF)
         )
 
     def test_body_order_matches_the_preset(self):
-        from movin_sdk_python.utils.skeleton_presets import MOVINMAN_V3_PRESET
-
         names = tuple(name for name, _ in mjcf_bodies(V3_MJCF))
         self.assertEqual(names, MOVINMAN_V3_PRESET.body_names)
         self.assertEqual(names, tuple(self.tpose_names))
 
     def test_body_positions_are_the_tpose_offsets(self):
-        from movin_sdk_python.utils.skeleton_presets import MOVINMAN_V3_PRESET
-
         for name, pos in mjcf_bodies(V3_MJCF):
             actual = tuple(float(v) for v in pos.split())
             if name == "Hips":
@@ -75,8 +87,6 @@ class V3SkeletonAssetTests(unittest.TestCase):
                 self.assertAlmostEqual(a, e, places=6, msg=name)
 
     def test_hips_height_matches_the_preset(self):
-        from movin_sdk_python.utils.skeleton_presets import MOVINMAN_V3_PRESET
-
         self.assertAlmostEqual(
             self.gen.compute_hips_height(self.tpose_root),
             MOVINMAN_V3_PRESET.default_hips_height,
@@ -99,8 +109,6 @@ class V3SkeletonAssetTests(unittest.TestCase):
     def test_mjcf_loads_in_mujoco_with_preset_joints(self):
         import mujoco
 
-        from movin_sdk_python.utils.skeleton_presets import MOVINMAN_V3_PRESET
-
         model = mujoco.MjModel.from_xml_path(V3_MJCF)
         self.assertEqual(model.nbody, 1 + len(MOVINMAN_V3_PRESET.body_names))  # + world
         self.assertEqual(model.njnt, 1 + 3 * len(MOVINMAN_V3_PRESET.joint_bones))  # + freejoint
@@ -109,6 +117,22 @@ class V3SkeletonAssetTests(unittest.TestCase):
                 self.assertGreaterEqual(
                     mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, f"{bone}_{axis}"), 0
                 )
+
+
+
+class PackagedAssetLocationTests(unittest.TestCase):
+    def test_presets_resolve_into_the_submodule(self):
+        # The example must load the submodule's assets, not another installed SDK.
+        for preset in PRESETS.values():
+            paths = [preset.mjcf_path]
+            if preset.mesh_npz_path is not None:
+                paths.append(preset.mesh_npz_path)
+            for path in paths:
+                self.assertTrue(
+                    os.path.realpath(path).startswith(os.path.realpath(SUBMODULE) + os.sep),
+                    f"{preset.name}: {path} is not inside the movin_sdk_python submodule",
+                )
+                self.assertTrue(os.path.exists(path), path)
 
 
 if __name__ == "__main__":

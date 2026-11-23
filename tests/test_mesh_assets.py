@@ -1,16 +1,21 @@
 """Guards the V3 mesh NPZ against the SDK's LBS path and the T-pose.
 
 The NPZ is extracted from ``data/MOVINman_V3_local_rotation_identity.fbx`` with
-``scripts/extract_movinman_mesh.py`` (runs in Blender, so the extraction itself is
-not repeated here).  The copy checked is the one the example loads at runtime,
-packaged with the SDK (``MOVINMAN_V3_PRESET.mesh_npz_path``);
-``test_packaged_assets`` checks that ``data/`` still holds the same bytes.
+``scripts/extract_movinman_mesh.py``.  The copy checked is the one the example
+loads at runtime, packaged with MOVIN-SDK-Python
+(``MOVINMAN_V3_PRESET.mesh_npz_path``).  The extraction runs inside Blender, so
+re-running it and comparing with the packaged copy is optional: it happens when
+a ``blender`` executable is found (``$BLENDER`` or on ``PATH``) and is skipped
+otherwise.
 
 Run with:  python -m unittest discover -s tests
 """
 
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -20,6 +25,9 @@ for path in (ROOT, os.path.join(ROOT, "movin_sdk_python"), os.path.join(ROOT, "s
 
 DATA = os.path.join(ROOT, "data")
 V3_TPOSE = os.path.join(DATA, "MOVINman_V3_local_rotation_identity_tpose.bvh")
+V3_FBX = os.path.join(DATA, "MOVINman_V3_local_rotation_identity.fbx")
+EXTRACTOR = os.path.join(ROOT, "scripts", "extract_movinman_mesh.py")
+BLENDER = os.environ.get("BLENDER") or shutil.which("blender")
 
 
 class V3MeshAssetTests(unittest.TestCase):
@@ -95,6 +103,33 @@ class V3MeshAssetTests(unittest.TestCase):
         self.assertLess(abs(bind_zup_m[:, 2].min()), 0.05)
         self.assertGreater(bind_zup_m[:, 2].max(), 1.6)
         self.assertGreater(bind_zup_m[:, 0].max() - bind_zup_m[:, 0].min(), 1.5)
+
+
+
+@unittest.skipUnless(BLENDER, "blender not found (set $BLENDER or put it on PATH)")
+class V3MeshExtractionTests(unittest.TestCase):
+    def test_packaged_mesh_is_the_extractor_output(self):
+        import numpy as np
+
+        from movin_sdk_python.utils.skeleton_presets import MOVINMAN_V3_PRESET
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, "movinman_v3_mesh.npz")
+            result = subprocess.run(
+                [BLENDER, "-b", "--python", EXTRACTOR, "--",
+                 "--fbx", V3_FBX, "--out", out, "--preset", "movinman_v3"],
+                capture_output=True, text=True, timeout=600,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout[-2000:] + result.stderr[-2000:])
+            extracted = np.load(out)
+            packaged = np.load(MOVINMAN_V3_PRESET.mesh_npz_path)
+            self.assertEqual(sorted(extracted.files), sorted(packaged.files))
+            for key in packaged.files:
+                self.assertEqual(extracted[key].dtype, packaged[key].dtype, key)
+                np.testing.assert_array_equal(
+                    extracted[key], packaged[key],
+                    err_msg=f"{key}: the SDK's movinman_v3_mesh.npz is not the extractor output",
+                )
 
 
 if __name__ == "__main__":

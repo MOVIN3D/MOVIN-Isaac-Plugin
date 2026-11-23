@@ -81,18 +81,12 @@ MOVIN-Isaac-Plugin/
     run_e2e.sh                   # End-to-end test of every mode in Isaac Lab (headless or --gui)
     capture_viewport.py          # Viewport screenshots for run_e2e.sh --gui
   tests/
-    test_skeleton_assets.py      # Checks the V3 MJCF against its T-pose and the SDK preset
-    test_mesh_assets.py          # Checks the V3 mesh NPZ against the SDK LBS path and the T-pose
+    test_skeleton_assets.py      # Checks the SDK's V3 MJCF against the generator, its T-pose and the preset
+    test_mesh_assets.py          # Checks the SDK's V3 mesh NPZ against the LBS path, the T-pose and
+                                 # (when Blender is available) the extractor
     test_fake_studio_stream.py   # Checks the fake MOVIN Studio stream against the BVH path
-    test_packaged_assets.py      # Checks the SDK's packaged assets against the generator and data/
     test_fitting.py              # Checks body-proportion fitting, BVH sizing and the USD cache layout
   data/
-    movinman_skeleton.xml        # MOVINMan MJCF skeleton (51 bones, legacy preset)
-    movinman_v3_skeleton.xml     # MOVINManV3 MJCF skeleton (54 joints, generated)
-    movinman_mesh.npz            # Pre-extracted mesh for LBS overlay (legacy preset)
-    movinman_v3_mesh.npz         # Pre-extracted mesh for LBS overlay (movinman_v3 preset)
-                                 # (the four files above are generator outputs; at runtime the
-                                 #  identical copies packaged with MOVIN-SDK-Python are used)
     MOVINMan_dump.xml            # MOVINMan FBX dump
     MOVINman_V3_local_rotation_identity.fbx
                                  # MOVINManV3 rig with identity local rotations in the bind pose (skinned mesh)
@@ -273,29 +267,31 @@ By default (`--preset auto`) the preset is detected automatically, per mode:
 
 Pass `--preset movinman` or `--preset movinman_v3` to force a specific preset instead of auto-detecting.
 
-The skeleton MJCF and mesh of each preset are the assets packaged with MOVIN-SDK-Python (`movin_sdk_python/movin_sdk_python/assets/`, resolved through `SkeletonPreset.mjcf_path` and `mesh_npz_path`). The files in `data/` are the outputs of this repo's generators, kept byte-identical to the packaged copies; after regenerating an asset, copy it into the SDK's `movin_sdk_python/assets/` (`tests/test_packaged_assets.py` fails while they differ).
+The skeleton MJCF and mesh of each preset are the assets packaged with MOVIN-SDK-Python (`movin_sdk_python/movin_sdk_python/assets/`, resolved through `SkeletonPreset.mjcf_path` and `mesh_npz_path`). This repo keeps their sources (`data/`) and generators (`scripts/`): after regenerating an asset, replace the file in MOVIN-SDK-Python's `movin_sdk_python/assets/` and update the submodule. The tests check that the packaged V3 MJCF is the generator's output and, when Blender is available, that the packaged V3 mesh is the extractor's output.
 
 Mesh overlay (`--view_mode mesh` / `mesh_skeleton`) is available for both presets: `movinman` uses the SDK's `movinman_mesh.npz` and `movinman_v3` its `movinman_v3_mesh.npz`. Pass `--mesh_npz` to use another asset with the preset's bone layout (it is fitted like the packaged one). A preset without a mesh asset prints a warning and falls back to skeleton-only rendering.
 
-`data/movinman_v3_mesh.npz` is extracted from the skinned mesh of `data/MOVINman_V3_local_rotation_identity.fbx` (44,402 vertices, 4 influences per vertex) with Blender's bundled FBX importer; the script checks that every joint's rest rotation is identity, which is what makes the NPZ's translation-only bind frames valid:
+The SDK's `movinman_v3_mesh.npz` is extracted from the skinned mesh of `data/MOVINman_V3_local_rotation_identity.fbx` (44,402 vertices, 4 influences per vertex) with Blender's bundled FBX importer; the script checks that every joint's rest rotation is identity, which is what makes the NPZ's translation-only bind frames valid:
 
 ```bash
 blender -b --python scripts/extract_movinman_mesh.py -- \
     --fbx data/MOVINman_V3_local_rotation_identity.fbx \
-    --out data/movinman_v3_mesh.npz --preset movinman_v3
+    --out movinman_v3_mesh.npz --preset movinman_v3
 ```
+
+`tests/test_mesh_assets.py` runs this extraction when a `blender` executable is found (`$BLENDER` or on `PATH`) and checks that its output equals the packaged NPZ; without Blender that test is skipped.
 
 Robot retargeting works with both presets; with `movinman_v3` the G1 torso is automatically mapped to `Spine3` via a V3-specific IK config.
 
-`data/movinman_v3_skeleton.xml` is generated from `data/MOVINman_V3_local_rotation_identity_tpose.bvh`, the rest pose of `data/MOVINman_V3_local_rotation_identity.fbx` (a MOVINManV3 rig whose bind pose has identity local rotations on every joint). Each `OFFSET` equals the FBX `Lcl Translation`, i.e. the joint's translation in its parent's frame -- the same `p` MOVIN Studio streams and the same `OFFSET` found in its BVH exports. Because the MJCF bodies sit in those frames, the streamed and BVH local rotations drive the hinges directly and no rest-pose removal is applied: streams from the earlier MOVINManV3 rig carry non-identity rest quaternions on the finger bones (`Thumb1` about 60 degrees) and removing them would straighten the fingers, while the identity-local rig streams identity rest quaternions, where removal is a no-op. The body order follows the BVH and the live stream (fingers Thumb, Index, Middle, Ring, Pinky within each hand); the FBX itself lists fingers alphabetically, which nothing at runtime depends on. Regenerate the MJCF with:
+The SDK's `movinman_v3_skeleton.xml` is generated from `data/MOVINman_V3_local_rotation_identity_tpose.bvh`, the rest pose of `data/MOVINman_V3_local_rotation_identity.fbx` (a MOVINManV3 rig whose bind pose has identity local rotations on every joint). Each `OFFSET` equals the FBX `Lcl Translation`, i.e. the joint's translation in its parent's frame -- the same `p` MOVIN Studio streams and the same `OFFSET` found in its BVH exports. Because the MJCF bodies sit in those frames, the streamed and BVH local rotations drive the hinges directly and no rest-pose removal is applied: streams from the earlier MOVINManV3 rig carry non-identity rest quaternions on the finger bones (`Thumb1` about 60 degrees) and removing them would straighten the fingers, while the identity-local rig streams identity rest quaternions, where removal is a no-op. The body order follows the BVH and the live stream (fingers Thumb, Index, Middle, Ring, Pinky within each hand); the FBX itself lists fingers alphabetically, which nothing at runtime depends on. Regenerate the MJCF with:
 
 ```bash
 python scripts/generate_skeleton_mjcf.py \
     data/MOVINman_V3_local_rotation_identity_tpose.bvh \
-    data/movinman_v3_skeleton.xml --model-name movinman_v3
+    movinman_v3_skeleton.xml --model-name movinman_v3
 ```
 
-`python -m unittest discover -s tests` checks that the committed MJCF and the SDK's packaged copy are exactly this command's output and that its body order and offsets match the SDK preset and the T-pose.
+The generator mirrors geom and actuator styling from the SDK's packaged legacy `movinman_skeleton.xml` (override with `--reference-mjcf`). `python -m unittest discover -s tests` checks that the SDK's packaged V3 MJCF is exactly this command's output and that its body order and offsets match the SDK preset and the T-pose.
 
 ## Options
 
@@ -332,7 +328,7 @@ python scripts/generate_skeleton_mjcf.py \
 
 ## Testing
 
-Unit tests (no Isaac Sim needed; about 5 seconds):
+Unit tests (no Isaac Sim needed; a few seconds, plus one run of the Blender mesh extractor when Blender is installed):
 
 ```bash
 python -m unittest discover -s tests

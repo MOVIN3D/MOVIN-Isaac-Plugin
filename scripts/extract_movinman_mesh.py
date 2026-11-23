@@ -6,9 +6,13 @@ Runs inside Blender's Python (Blender 4.x / 5.x, bundled FBX importer):
 
     blender -b --python scripts/extract_movinman_mesh.py -- \
         --fbx data/MOVINman_V3_local_rotation_identity.fbx \
-        --out data/movinman_v3_mesh.npz --preset movinman_v3
+        --out movinman_v3_mesh.npz --preset movinman_v3
 
-NPZ layout (identical to ``data/movinman_mesh.npz``):
+The runtime copy of the result ships with MOVIN-SDK-Python
+(``movin_sdk_python/assets/movinman_v3_mesh.npz``); tests/test_mesh_assets.py
+re-runs this extraction when Blender is available and compares the two.
+
+NPZ layout (identical to the SDK's packaged ``movinman_mesh.npz``):
     vertices               (V, 3) float32  bind-pose vertices, geometry space (cm, Z-up)
     faces                  (F, 3) int32    triangles
     bone_names             (B,)   str      skeleton preset order (root "Hips" first)
